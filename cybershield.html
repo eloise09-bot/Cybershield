@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberShield: Defense Protocol</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, deleteDoc, collection, getDocs, query, where, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAZNEkPFO0-UPPpkK4QJnqngz1vckCCjwo",
+            authDomain: "cybershield-defense-protocol.firebaseapp.com",
+            databaseURL: "https://cybershield-defense-protocol-default-rtdb.firebaseio.com",
+            projectId: "cybershield-defense-protocol",
+            storageBucket: "cybershield-defense-protocol.firebasestorage.app",
+            messagingSenderId: "932532925060",
+            appId: "1:932532925060:web:3a44f5384a68d1c6f5c8d1",
+            measurementId: "G-LLWKYV79C6"
+        };
+
+        const csAppId = 'cybershield-v18';
+        let app, db, auth;
+        window.firebaseStatus = { initialized: false, auth: false, error: null };
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            window.firebaseStatus.initialized = true;
+        } catch (error) {
+            window.firebaseStatus.error = error.message;
+            console.error("[FIREBASE CRITICAL] Erro:", error);
+        }
+
+        window.csFirebase = { 
+            db, auth, csAppId,
+            modules: { doc, setDoc, getDoc, updateDoc, onSnapshot, deleteDoc, signInAnonymously, onAuthStateChanged, collection, getDocs, query, where, runTransaction }
+        };
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: #0f172a; 
+            --accent-cyan: #06b6d4; 
+            --accent-red: #ef4444; 
+            --accent-blue: #3b82f6;
+        }
+        
+        body {
+            background-color: var(--bg-color); color: #f8fafc; font-family: 'Inter', sans-serif;
+            overflow: hidden; user-select: none; font-size: 1.05rem;
+        }
+
+        .mono { font-family: 'Fira Code', monospace; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
+
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none; z-index: 9999; opacity: 0.15;
+        }
+
+        @keyframes pulse-alert {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); border-color: rgba(239, 68, 68, 1); background-color: rgba(239, 68, 68, 0.2); }
+            70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); border-color: rgba(239, 68, 68, 0.3); }
+        }
+        .node-alert { animation: pulse-alert 1.5s infinite; color: var(--accent-red) !important; font-weight: bold; }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0.75rem;
+            box-shadow: 0 15px 35px -10px rgba(0,0,0,0.6);
+        }
+        
+        .btn-cyber {
+            background: transparent; border: 2px solid var(--accent-cyan); color: var(--accent-cyan);
+            transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; padding: 0.85rem 1.5rem; border-radius: 0.5rem;
+        }
+        .btn-cyber:hover:not(:disabled) { background: var(--accent-cyan); color: var(--bg-color); box-shadow: 0 0 20px rgba(6, 182, 212, 0.5); }
+        .btn-cyber:disabled { border-color: #334155; color: #475569; cursor: not-allowed; }
+
+        .btn-action { background: #1e293b; border: 1.5px solid #334155; color: #e2e8f0; transition: all 0.2s; padding: 0.85rem 1.2rem; border-radius: 0.5rem; font-weight: 600; }
+        .btn-action:hover:not(:disabled) { background: #334155; border-color: #64748b; color: white; }
+
+        .view { display: none; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; background-color: #000000; z-index: 10; }
+        .view.active { display: flex; flex-direction: column; }
+        
+        #view-game { z-index: 5; background-color: #020617; }
+        
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal-overlay.active { display: flex; }
+
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { pointer-events: auto; padding: 14px 22px; border-radius: 6px; font-size: 14px; font-weight: 600; color: white; display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(100%); animation: slideIn 0.3s forwards; box-shadow: 0 5px 15px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); }
+        .toast.success { background: #064e3b; border-left: 5px solid #10b981; }
+        .toast.error { background: #7f1d1d; border-left: 5px solid #ef4444; }
+        .toast.warning { background: #78350f; border-left: 5px solid #f59e0b; }
+        .toast.info { background: #1e3a8a; border-left: 5px solid #3b82f6; }
+        .toast.fade-out { animation: fadeOut 0.3s forwards; }
+        
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(20px); } }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="scanlines"></div>
+    <div id="toast-container"></div>
+
+    <script>
+        window.soundManager = {
+            sfxEnabled: true,
+            musicEnabled: true,
+            audioCtx: null,
+            bgInterval: null,
+
+            init() {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioCtx = new AudioContext();
+                } catch(e) {}
+            },
+
+            playClick() {
+                if(!this.sfxEnabled) return;
+                this.ensureContext();
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, this.audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, this.audioCtx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.05);
+                osc.connect(gain); gain.connect(this.audioCtx.destination);
+                osc.start(); osc.stop(this.audioCtx.currentTime + 0.05);
+            },
+
+            playSuccess() {
+                if(!this.sfxEnabled) return;
+                this.ensureContext();
+                const now = this.audioCtx.currentTime;
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1046.50, now);
+                osc.frequency.setValueAtTime(1318.51, now + 0.08);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                osc.connect(gain); gain.connect(this.audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.5);
+            },
+
+            playError() {
+                if(!this.sfxEnabled) return;
+                this.ensureContext();
+                const now = this.audioCtx.currentTime;
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.setValueAtTime(120, now + 0.15);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.connect(gain); gain.connect(this.audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.35);
+            },
+
+            playNotification() {
+                if(!this.sfxEnabled) return;
+                this.ensureContext();
+                const now = this.audioCtx.currentTime;
+                const osc1 = this.audioCtx.createOscillator();
+                const osc2 = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc1.type = 'sine'; osc2.type = 'sine';
+                osc1.frequency.setValueAtTime(659.25, now);
+                osc2.frequency.setValueAtTime(880, now + 0.08);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc1.connect(gain); osc2.connect(gain); gain.connect(this.audioCtx.destination);
+                osc1.start(now); osc1.stop(now + 0.3);
+                osc2.start(now + 0.08); osc2.stop(now + 0.3);
+            },
+
+            startAmbience() {
+                if (!this.musicEnabled || this.bgInterval) return;
+                this.ensureContext();
+                const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 659.25];
+                let idx = 0;
+                
+                const playNote = () => {
+                    if (!this.musicEnabled) return;
+                    const now = this.audioCtx.currentTime;
+                    const osc = this.audioCtx.createOscillator();
+                    const gain = this.audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(notes[idx], now);
+                    gain.gain.setValueAtTime(0.03, now);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+                    osc.connect(gain); gain.connect(this.audioCtx.destination);
+                    osc.start(now); osc.stop(now + 0.35);
+                    idx = (idx + 1) % notes.length;
+                };
+
+                playNote();
+                this.bgInterval = setInterval(() => playNote(), 450);
+            },
+
+            stopAmbience() {
+                if (this.bgInterval) {
+                    clearInterval(this.bgInterval);
+                    this.bgInterval = null;
+                }
+            },
+
+            ensureContext() {
+                if (!this.audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.audioCtx = new AudioContext();
+                }
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            }
+        };
+
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (btn && !document.getElementById('view-game').classList.contains('active')) {
+                window.soundManager.playClick();
+                if (window.soundManager.musicEnabled && !window.soundManager.bgInterval) {
+                    window.soundManager.startAmbience();
+                }
+            }
+        });
+    </script>
+
+    <div id="firebase-debug-bar" class="fixed top-0 left-0 right-0 bg-slate-950 border-b border-slate-800 text-[11px] mono px-4 py-1.5 flex justify-between items-center z-[200] text-slate-400">
+        <div class="flex items-center gap-6">
+            <span>Auth: <strong id="debug-auth" class="text-yellow-500">Conectando...</strong></span>
+            <span>UID: <strong id="debug-uid" class="text-slate-300">-</strong></span>
+        </div>
+        <div>CyberShield OS v18 | <span id="debug-mode">Menu Principal</span></div>
+    </div>
+
+    <!-- VIEW PRINCIPAL -->
+    <div id="view-main" class="view active items-center justify-center pt-8">
+        <div class="glass-panel p-12 z-10 w-full max-w-xl text-center flex flex-col gap-8 shadow-2xl border-cyan-900 border relative">
+            <div class="absolute -top-12 -left-12 w-40 h-40 bg-cyan-600 rounded-full blur-[120px] opacity-20 pointer-events-none"></div>
+            
+            <div>
+                <h1 class="text-5xl font-black tracking-widest text-white mb-2" style="text-shadow: 0 0 20px rgba(6,182,212,0.6);">CYBERSHIELD</h1>
+                <h2 class="text-xs font-bold tracking-[0.5em] text-cyan-400 uppercase">Defense Protocol</h2>
+            </div>
+            
+            <div class="flex flex-col gap-4">
+                <button onclick="ui.showView('view-single-setup')" class="btn-action py-4 rounded-xl text-base tracking-widest font-extrabold text-white bg-slate-900 border-slate-700 hover:border-cyan-500 transition shadow-lg"><i class="fas fa-play mr-3 text-cyan-400"></i> JOGAR (SINGLEPLAYER)</button>
+                <button onclick="ui.showView('view-multi-select')" class="btn-cyber py-4 rounded-xl text-base tracking-widest bg-cyan-950/40 shadow-lg"><i class="fas fa-globe mr-3"></i> MULTIPLAYER ONLINE</button>
+                <div class="grid grid-cols-2 gap-4 mt-2">
+                    <button onclick="ui.showModal('modal-settings')" class="btn-action py-3.5 rounded-lg text-slate-300 text-xs font-bold hover:text-white"><i class="fas fa-cog mr-2"></i> Configurações</button>
+                    <button onclick="ui.showModal('modal-tutorial')" class="btn-action py-3.5 rounded-lg text-slate-300 text-xs font-bold hover:text-white"><i class="fas fa-book mr-2"></i> Como Jogar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW SETUP SINGLEPLAYER -->
+    <div id="view-single-setup" class="view items-center justify-center pt-8">
+        <div class="glass-panel p-10 z-10 w-full max-w-md text-center flex flex-col gap-6 shadow-2xl border-slate-700">
+            <h2 class="text-2xl font-black text-white tracking-widest uppercase border-b border-slate-800 pb-3"><i class="fas fa-user text-cyan-400 mr-2"></i> Configurar Singleplayer</h2>
+            <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 text-left flex flex-col gap-2">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Dificuldade da Operação:</label>
+                <select id="single-diff" class="w-full bg-slate-950 border border-slate-600 rounded-lg p-3 text-white text-sm font-bold outline-none focus:border-cyan-500">
+                    <option value="facil">Fácil (Mais tempo, menos ameaças)</option>
+                    <option value="normal" selected>Normal (Padrão tático)</option>
+                    <option value="dificil">Difícil (Ataques intensos e rápidos)</option>
+                </select>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="ui.showView('view-main')" class="btn-action w-1/2 py-3 rounded-lg text-xs font-bold">Voltar</button>
+                <button onclick="app.startSingleplayer()" class="btn-cyber w-1/2 py-3 rounded-lg text-xs font-extrabold bg-cyan-950/60">INICIAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-multi-select" class="view items-center justify-center pt-8">
+        <div class="w-full max-w-4xl p-6 flex flex-col gap-8 relative z-10">
+            <div class="text-center">
+                <h2 class="text-4xl font-black text-white tracking-widest uppercase border-b border-slate-800 pb-4"><i class="fas fa-network-wired text-cyan-400 mr-3"></i> Central Multiplayer</h2>
+                <p class="text-slate-300 text-sm mt-3">Identificação ativa do operador: <strong id="lbl-active-operator" class="text-cyan-400 mono text-base">---</strong> | Pontos Totais: <strong id="lbl-global-score" class="text-yellow-400 mono text-base">0</strong></p>
+            </div>
+            
+            <div class="bg-slate-900/90 p-5 rounded-xl border border-slate-700 flex gap-4 items-center">
+                <input type="text" id="main-player-name" placeholder="INIRA SEU CODENOME..." class="flex-1 bg-slate-950 border border-slate-600 rounded-lg px-4 py-3 text-white mono font-bold uppercase focus:outline-none focus:border-cyan-500 text-sm" maxlength="15">
+                <button onclick="app.saveIdent()" class="bg-cyan-700 hover:bg-cyan-600 border border-cyan-500 rounded-lg px-6 py-3 text-white font-bold text-xs uppercase tracking-widest transition shadow"><i class="fas fa-check mr-2"></i> Definir</button>
+            </div>
+
+            <div class="text-center bg-slate-900/60 border border-slate-800 p-3 rounded-lg">
+                <p class="text-slate-300 text-sm font-bold">Você irá "Lutar" contra outras equipes adversárias do mesmo modo de dificuldade.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- VERSUS DIFF SELECT -->
+                <div class="glass-panel p-8 border-t-4 border-red-500 flex flex-col gap-6">
+                    <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                        <i class="fas fa-crosshairs text-4xl text-red-500"></i>
+                        <div>
+                            <h3 class="text-xl font-black text-white tracking-widest">MODO VERSUS</h3>
+                            <p class="text-[10px] text-red-400 uppercase tracking-widest font-extrabold">Competitivo (Blue vs Red)</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <button onclick="app.selectMultiMode('versus', 'facil')" class="py-3.5 bg-green-700 hover:bg-green-600 border border-green-500 rounded-lg text-white font-black uppercase tracking-widest shadow">Fácil</button>
+                        <button onclick="app.selectMultiMode('versus', 'normal')" class="py-3.5 bg-yellow-600 hover:bg-yellow-500 border border-yellow-500 rounded-lg text-white font-black uppercase tracking-widest shadow">Normal</button>
+                        <button onclick="app.selectMultiMode('versus', 'dificil')" class="py-3.5 bg-red-800 hover:bg-red-700 border border-red-600 rounded-lg text-white font-black uppercase tracking-widest shadow">Difícil</button>
+                    </div>
+                </div>
+
+                <!-- LIVRE DIFF SELECT -->
+                <div class="glass-panel p-8 border-t-4 border-cyan-500 flex flex-col gap-6">
+                    <div class="flex items-center gap-4 border-b border-slate-800 pb-4">
+                        <i class="fas fa-users text-4xl text-cyan-500"></i>
+                        <div>
+                            <h3 class="text-xl font-black text-white tracking-widest">MODO LIVRE</h3>
+                            <p class="text-[10px] text-cyan-400 uppercase tracking-widest font-extrabold">Cooperação e Competitivo</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <button onclick="app.selectMultiMode('free', 'facil')" class="py-3.5 bg-green-700 hover:bg-green-600 border border-green-500 rounded-lg text-white font-black uppercase tracking-widest shadow">Fácil</button>
+                        <button onclick="app.selectMultiMode('free', 'normal')" class="py-3.5 bg-yellow-600 hover:bg-yellow-500 border border-yellow-500 rounded-lg text-white font-black uppercase tracking-widest shadow">Normal</button>
+                        <button onclick="app.selectMultiMode('free', 'dificil')" class="py-3.5 bg-red-800 hover:bg-red-700 border border-red-600 rounded-lg text-white font-black uppercase tracking-widest shadow">Difícil</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center pt-2">
+                <button onclick="ui.showView('view-main')" class="text-slate-400 hover:text-white text-xs tracking-widest uppercase font-extrabold transition"><i class="fas fa-arrow-left mr-2"></i> Voltar ao Menu Principal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW SELEÇÃO MULTIPLAYER (PASSO 2: AÇÕES) -->
+    <div id="view-multi-action" class="view items-center justify-center pt-8">
+        <div class="w-full max-w-2xl p-6 flex flex-col gap-6 relative z-10">
+            <div class="text-center mb-4">
+                <h2 id="action-step-title" class="text-3xl font-black text-white tracking-widest uppercase border-b border-slate-800 pb-4"><i class="fas fa-cog text-cyan-400 mr-3"></i> ---</h2>
+            </div>
+
+            <!-- AÇÕES VERSUS -->
+            <div id="action-versus-box" class="glass-panel p-8 border-t-4 border-red-500 flex flex-col gap-6 hidden">
+                <p class="text-sm text-slate-300 leading-relaxed text-center">Duelo tático entre equipes. Selecione o formato da operação:</p>
+                <div class="grid grid-cols-2 gap-4 mt-2">
+                    <button onclick="app.joinVersus(1)" class="btn-action py-4 rounded-xl font-bold text-white text-sm hover:border-red-500 uppercase tracking-wider shadow">1 x 1</button>
+                    <button onclick="app.joinVersus(2)" class="btn-action py-4 rounded-xl font-bold text-white text-sm hover:border-red-500 uppercase tracking-wider shadow">2 x 2</button>
+                    <button onclick="app.joinVersus(3)" class="btn-action py-4 rounded-xl font-bold text-white text-sm hover:border-red-500 uppercase tracking-wider shadow">3 x 3</button>
+                    <button onclick="app.joinVersus(4)" class="btn-action py-4 rounded-xl font-bold text-white text-sm hover:border-red-500 uppercase tracking-wider shadow">4 x 4</button>
+                </div>
+            </div>
+
+            <!-- AÇÕES LIVRE -->
+            <div id="action-free-box" class="glass-panel p-8 border-t-4 border-cyan-500 flex flex-col gap-6 hidden">
+                <p class="text-sm text-slate-300 leading-relaxed text-center">Crie uma equipe (2 a 6 operadores) com código ou entre em salas públicas.</p>
+                <div class="flex flex-col gap-4 mt-2">
+                    <button onclick="ui.showModal('modal-create-free')" class="btn-cyber py-4 rounded-xl text-sm"><i class="fas fa-plus mr-2"></i> Criar Equipe / Sala</button>
+                    <button onclick="app.openPublicRoomsModal()" class="btn-action py-4 rounded-xl font-bold text-cyan-400 text-sm border-cyan-900 shadow"><i class="fas fa-search mr-2"></i> Salas Disponíveis</button>
+                    <div class="flex gap-2 mt-2">
+                        <input type="text" id="direct-room-code" placeholder="CÓDIGO DA SALA" class="w-2/3 bg-slate-900 border border-slate-700 rounded-xl px-4 text-center text-white mono font-bold uppercase focus:border-cyan-500 focus:outline-none text-sm shadow-inner">
+                        <button onclick="app.joinFreeByInput()" class="w-1/3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl text-slate-200 font-bold text-sm transition uppercase shadow">Entrar</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center pt-4">
+                <button onclick="ui.showView('view-multi-select')" class="text-slate-400 hover:text-white text-xs tracking-widest uppercase font-extrabold transition"><i class="fas fa-arrow-left mr-2"></i> Voltar às Dificuldades</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-lobby-versus" class="view p-6 pt-10 items-center">
+        <div class="w-full max-w-5xl flex flex-col gap-6 h-full max-h-[820px]">
+            <div class="flex justify-between items-center glass-panel p-5 px-8 border-l-4 border-l-red-500">
+                <div>
+                    <h2 class="text-2xl font-black text-white tracking-widest uppercase">LOBBY VERSUS: <span id="lob-vs-format" class="text-red-400">?x?</span></h2>
+                    <p class="text-xs text-slate-300 mt-1">A partida inicia automaticamente apenas quando ambos os times estiverem completos e prontos.</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] text-slate-400 tracking-widest mb-1 font-bold">CÓDIGO DA PARTIDA</div>
+                    <div id="lob-vs-code" class="text-xl font-black text-white mono bg-slate-900 px-4 py-1.5 rounded border border-slate-700 inline-block">----</div>
+                </div>
+            </div>
+
+            <div class="flex gap-6 flex-1 min-h-0">
+                <div class="w-1/2 glass-panel flex flex-col border-t-4 border-t-blue-500 overflow-hidden shadow-xl">
+                    <div class="bg-blue-950/40 p-4 flex justify-between items-center border-b border-blue-900/50">
+                        <h3 class="font-black text-blue-400 text-sm tracking-widest uppercase"><i class="fas fa-shield-alt mr-2"></i> BLUE TEAM <span id="lob-vs-bcount" class="text-xs font-normal text-blue-200 ml-2">(0/0)</span></h3>
+                        <button onclick="app.switchVersusTeam('blue')" class="px-4 py-2 bg-blue-900 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow">JUNTAR-SE</button>
+                    </div>
+                    <div id="lob-vs-blist" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-900/60"></div>
+                </div>
+
+                <div class="w-1/2 glass-panel flex flex-col border-t-4 border-t-red-500 overflow-hidden shadow-xl">
+                    <div class="bg-red-950/40 p-4 flex justify-between items-center border-b border-red-900/50">
+                        <h3 class="font-black text-red-400 text-sm tracking-widest uppercase"><i class="fas fa-fire mr-2"></i> RED TEAM <span id="lob-vs-rcount" class="text-xs font-normal text-red-200 ml-2">(0/0)</span></h3>
+                        <button onclick="app.switchVersusTeam('red')" class="px-4 py-2 bg-red-900 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition shadow">JUNTAR-SE</button>
+                    </div>
+                    <div id="lob-vs-rlist" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-900/60"></div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-5 flex items-center justify-between gap-6 border border-slate-700">
+                <div class="w-1/3">
+                    <label class="text-[10px] text-slate-400 font-bold tracking-widest block mb-1 uppercase">FUNÇÃO TÁTICA</label>
+                    <select id="lob-vs-role" onchange="app.changeRole(this.value)" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-xs font-bold focus:border-cyan-500 focus:outline-none">
+                        <option value="soc">Analista SOC</option><option value="net">Admin de Rede</option>
+                        <option value="mal">Esp. Malware</option><option value="iam">Analista IAM</option>
+                    </select>
+                </div>
+                <div class="w-1/3">
+                    <button id="btn-vs-ready" onclick="app.toggleReady()" class="w-full py-3.5 rounded-lg border-2 border-green-600 text-green-500 font-extrabold hover:bg-green-600 hover:text-white transition uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(22,163,74,0.3)]">ESTOU PRONTO</button>
+                </div>
+                <div class="w-1/3 text-right">
+                    <button onclick="app.exitToMainMenu()" class="text-red-400 hover:text-red-300 text-xs font-extrabold tracking-widest transition uppercase"><i class="fas fa-sign-out-alt mr-1"></i> Sair do Modo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW LOBBY LIVRE -->
+    <div id="view-lobby-free" class="view p-6 pt-10 items-center">
+        <div class="w-full max-w-4xl flex flex-col gap-6 h-full max-h-[780px]">
+            <div class="flex justify-between items-center glass-panel p-5 px-8 border-l-4 border-l-cyan-500">
+                <div>
+                    <h2 class="text-2xl font-black text-white tracking-widest uppercase">EQUIPE: <span id="lob-free-name" class="text-cyan-400">---</span></h2>
+                    <p class="text-xs text-slate-300 mt-1">Modo Cooperação Livre. Mínimo de 2 e Máximo de 6 operadores.</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-[10px] text-cyan-400 tracking-widest mb-1 font-bold uppercase">CÓDIGO DE ACESSO</div>
+                    <div id="lob-free-code" class="text-2xl font-black text-white mono bg-cyan-950/60 px-5 py-1.5 rounded-lg border border-cyan-800 inline-block shadow-[0_0_20px_rgba(6,182,212,0.3)]">----</div>
+                </div>
+            </div>
+
+            <div class="flex gap-6 flex-1 min-h-0">
+                <div class="w-2/3 glass-panel flex flex-col border border-slate-700 overflow-hidden shadow-xl">
+                    <div class="bg-slate-800 p-3.5 px-5 flex justify-between items-center border-b border-slate-700">
+                        <h3 class="font-bold text-slate-200 text-xs tracking-widest uppercase"><i class="fas fa-users mr-2"></i> ROSTER DE OPERADORES <span id="lob-free-count" class="text-cyan-400 ml-1">0/6</span></h3>
+                    </div>
+                    <div id="lob-free-list" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-900/60"></div>
+                </div>
+
+                <div class="w-1/3 flex flex-col gap-4">
+                    <div class="glass-panel p-5 border border-slate-700 flex-1 flex flex-col shadow-xl">
+                        <div class="mb-4">
+                            <label class="text-[10px] text-slate-400 font-bold tracking-widest block mb-1 uppercase">FUNÇÃO TÁTICA</label>
+                            <select id="lob-free-role" onchange="app.changeRole(this.value)" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white text-xs font-bold focus:border-cyan-500 focus:outline-none">
+                                <option value="soc">Analista SOC</option><option value="net">Admin de Rede</option>
+                                <option value="mal">Esp. Malware</option><option value="iam">Analista IAM</option>
+                            </select>
+                        </div>
+                        <div id="lob-free-diff-box" class="mb-4 hidden border-t border-slate-700 pt-4">
+                            <label class="text-[10px] text-yellow-400 font-extrabold tracking-widest block mb-1 uppercase"><i class="fas fa-crown mr-1"></i> DIFICULDADE (ADMIN)</label>
+                            <select id="lob-free-diff" onchange="app.changeDifficulty(this.value)" class="w-full bg-slate-900 border border-yellow-900 rounded-lg p-3 text-white text-xs font-bold focus:outline-none">
+                                <option value="facil">Fácil</option><option value="normal">Normal</option><option value="dificil">Difícil</option>
+                            </select>
+                        </div>
+                        <div class="mt-auto space-y-3">
+                            <button id="btn-free-ready" onclick="app.toggleReady()" class="w-full py-3.5 rounded-lg border-2 border-slate-600 text-slate-300 font-bold hover:border-green-500 hover:text-green-400 transition uppercase text-xs tracking-widest">ESTOU PRONTO</button>
+                            <button id="btn-free-search" onclick="app.hostSearchOpponent()" class="hidden w-full py-4 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-black transition uppercase text-xs tracking-widest shadow-lg shadow-yellow-900/50"><i class="fas fa-search mr-2"></i> BUSCAR ADVERSÁRIO</button>
+                            <button id="btn-free-cancel-search" onclick="app.cancelSearch()" class="hidden w-full py-4 rounded-lg bg-red-600 hover:bg-red-500 text-white font-black transition uppercase text-xs tracking-widest shadow-lg shadow-red-900/50"><i class="fas fa-times mr-2"></i> CANCELAR BUSCA</button>
+                            <div id="lob-free-status" class="text-[10px] text-center text-slate-400 font-extrabold tracking-widest">AGUARDANDO EQUIPE (MÍN: 2)</div>
+                        </div>
+                    </div>
+                    <button onclick="app.exitToMainMenu()" class="glass-panel py-3.5 text-red-400 hover:bg-red-950/50 text-xs font-extrabold tracking-widest transition uppercase border border-red-900/50"><i class="fas fa-sign-out-alt mr-2"></i> Sair do Modo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-game" class="view p-2.5 h-screen flex flex-col gap-2.5">
+        <div class="glass-panel flex justify-between items-center p-3 px-6 h-[78px] shrink-0 border-b border-slate-700 shadow-lg">
+            <div class="flex items-center gap-4 w-1/4">
+                <div class="w-11 h-11 rounded-lg bg-slate-800 border border-slate-600 flex items-center justify-center">
+                    <i id="ingame-role-icon" class="fas fa-shield-alt text-2xl text-cyan-400"></i>
+                </div>
+                <div>
+                    <div id="game-mode-label" class="text-[10px] text-slate-400 font-black tracking-widest uppercase mb-0.5">---</div>
+                    <div id="game-player-role" class="text-xs font-black text-white uppercase tracking-wider">---</div>
+                    <div class="text-[10px] text-cyan-400 mono font-bold">Score Pessoal: <span id="game-personal-score">0</span></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-center items-center flex-1" id="game-score-board">
+                <div id="score-container-standard" class="bg-slate-900/90 border border-cyan-900/60 p-2.5 px-4 rounded-xl flex flex-col w-full max-w-md shadow-inner hidden">
+                    <div class="flex justify-between items-end mb-1.5 px-1">
+                        <span class="text-[11px] font-black text-slate-300 tracking-widest uppercase">EQUIPE: <span id="std-team-name" class="text-cyan-300">---</span></span>
+                        <span id="std-team-score" class="text-cyan-400 font-black text-sm mono">0 PTS</span>
+                    </div>
+                    <div class="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                        <div id="std-bar-sec" class="bg-gradient-to-r from-cyan-600 to-cyan-400 h-full w-full transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- PLACAR MODO LIVRE (MÚLTIPLAS EQUIPES) -->
+                <div id="score-container-free-multi" class="flex gap-4 w-full max-w-3xl hidden overflow-x-auto pb-1">
+                    <!-- Cards dinâmicos inseridos via JS -->
+                </div>
+
+                <div id="score-container-versus" class="flex gap-6 w-full max-w-2xl hidden">
+                    <div class="flex-1 bg-blue-950/30 border border-blue-900/60 p-2.5 rounded-xl shadow-inner">
+                        <div class="flex justify-between items-end mb-1 px-1">
+                            <span id="vs-name-blue" class="text-[10px] font-black text-blue-400 tracking-widest uppercase">BLUE TEAM</span>
+                            <span id="vs-blue-score" class="text-blue-300 font-black text-sm mono">0 PTS</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800"><div id="vs-bar-blue" class="bg-blue-500 h-full w-full transition-all duration-500"></div></div>
+                    </div>
+                    <div class="flex items-center justify-center text-slate-500 font-black italic text-lg">VS</div>
+                    <div class="flex-1 bg-red-950/30 border border-red-900/60 p-2.5 rounded-xl shadow-inner">
+                        <div class="flex justify-between items-end mb-1 px-1">
+                            <span id="vs-name-red" class="text-[10px] font-black text-red-400 tracking-widest uppercase">RED TEAM</span>
+                            <span id="vs-red-score" class="text-red-300 font-black text-sm mono">0 PTS</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800"><div id="vs-bar-red" class="bg-red-500 h-full w-full transition-all duration-500"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-5 w-1/4">
+                <div class="text-right bg-slate-900 border border-slate-700 px-4 py-1.5 rounded-xl">
+                    <div class="text-[9px] text-slate-400 font-extrabold tracking-widest uppercase">CRONÔMETRO</div>
+                    <div id="game-timer" class="text-xl mono font-black text-white tracking-widest">--:--</div>
+                </div>
+                <button onclick="ui.showModal('modal-esc')" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 w-11 h-11 rounded-xl text-slate-200 transition flex items-center justify-center shadow"><i class="fas fa-bars text-lg"></i></button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex gap-2.5 min-h-0">
+            <div class="w-1/4 flex flex-col gap-2.5">
+                <div class="glass-panel p-4 flex-1 flex flex-col relative overflow-hidden bg-slate-900/60 border border-slate-800">
+                    <h3 class="text-xs font-black text-slate-300 tracking-widest border-b border-slate-700 pb-2 mb-3 uppercase"><i class="fas fa-sitemap mr-2 text-cyan-400"></i> Topologia de Rede</h3>
+                    <p class="text-[10px] text-slate-400 leading-tight mb-3">Painel interativo. Elementos piscam em vermelho sob ataque. Clique para filtrar logs.</p>
+                    
+                    <div class="flex-1 flex flex-col items-center justify-center relative gap-5">
+                        <button onclick="app.filterLogs('wan')" id="node-wan" class="px-7 py-2 border border-slate-600 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition z-10 shadow"><i class="fas fa-globe mr-1.5 text-cyan-400"></i> EXTERNO (WAN)</button>
+                        <div class="w-0.5 h-6 bg-slate-700"></div>
+                        <button onclick="app.filterLogs('firewall')" id="node-firewall" class="px-9 py-2.5 border-2 border-cyan-600 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 text-xs font-black uppercase transition z-10 shadow"><i class="fas fa-shield-alt mr-1.5"></i> Firewall</button>
+                        <div class="w-0.5 h-6 bg-slate-700"></div>
+                        <div class="w-full border-t-2 border-slate-700 flex justify-center gap-10 pt-4 relative">
+                            <div class="absolute w-0.5 h-4 bg-slate-700 top-0 left-[calc(50%-2rem)]"></div>
+                            <div class="absolute w-0.5 h-4 bg-slate-700 top-0 right-[calc(50%-2rem)]"></div>
+                            <button onclick="app.filterLogs('servers')" id="node-servers" class="px-4 py-2.5 border border-blue-500 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 text-[11px] font-bold uppercase transition flex flex-col items-center gap-1 shadow"><i class="fas fa-server text-xl text-blue-400"></i> Servidores</button>
+                            <button onclick="app.filterLogs('data')" id="node-data" class="px-4 py-2.5 border border-purple-500 rounded-lg bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 text-[11px] font-bold uppercase transition flex flex-col items-center gap-1 shadow"><i class="fas fa-database text-xl text-purple-400"></i> Banco DB</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-4 h-48 flex flex-col bg-slate-900/60 border border-slate-800 hidden" id="panel-team-roster">
+                    <h3 class="text-xs font-black text-slate-300 tracking-widest border-b border-slate-700 pb-2 mb-2 uppercase"><i class="fas fa-users mr-2 text-cyan-400"></i> Operadores da Equipe</h3>
+                    <div id="ingame-team-players" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+                </div>
+            </div>
+
+            <!-- OVERLAY DE ELIMINAÇÃO -->
+            <div id="eliminated-overlay" class="absolute inset-0 bg-red-950/95 z-50 hidden flex-col items-center justify-center text-center p-8 backdrop-blur-md rounded-xl border border-red-500 m-2.5">
+                <i class="fas fa-user-slash text-6xl text-red-500 mb-4 animate-pulse"></i>
+                <h2 class="text-4xl font-black text-white tracking-widest uppercase mb-2">ACESSO REVOGADO</h2>
+                <p class="text-sm text-red-300 font-bold mb-6 max-w-md">Você excedeu o limite de falhas (6 erros) e foi isolado pelo sistema anti-sabotagem. Acompanhe sua equipe enquanto eles tentam finalizar a operação.</p>
+            </div>
+
+            <div class="w-2/4 glass-panel p-5 flex flex-col bg-slate-900/90 border-t-4 border-t-yellow-500 shadow-xl relative">
+                <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-3">
+                    <h3 class="text-sm font-black text-white tracking-widest uppercase"><i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i> INCIDENTES ATIVOS DA SUA EQUIPE</h3>
+                    <span class="text-[11px] bg-slate-950 px-3.5 py-1.5 rounded-lg text-yellow-500 mono font-black border border-yellow-900/60 shadow-inner"><span id="active-events-count">0</span>/<span id="max-events-limit">6</span> AMEAÇAS</span>
+                </div>
+                <div id="events-container" class="flex-1 overflow-y-auto pr-2 flex flex-col gap-3.5">
+                    <div id="no-events-msg" class="h-full flex items-center justify-center flex-col gap-3.5 opacity-60"><i class="fas fa-shield-check text-6xl text-green-600"></i><p class="text-xs font-black tracking-widest text-slate-400 uppercase">Sistemas Operando Normally</p></div>
+                </div>
+            </div>
+
+            <div class="w-1/4 flex flex-col gap-2.5">
+                <div class="glass-panel p-4 flex-1 flex flex-col bg-slate-900/60 border border-slate-800">
+                    <div class="flex justify-between items-end border-b border-slate-700 pb-2 mb-2">
+                        <h3 class="text-xs font-black text-slate-300 tracking-widest uppercase"><i class="fas fa-terminal mr-2 text-cyan-400"></i> Logs de Sistema</h3>
+                        <span id="log-filter-status" class="text-[10px] text-green-400 font-mono font-extrabold bg-green-950/50 px-2 py-0.5 rounded border border-green-800">GERAL</span>
+                    </div>
+                    <div id="system-logs" class="flex-1 overflow-y-auto text-[11px] mono flex flex-col gap-2 text-slate-300 pr-1 select-text"></div>
+                </div>
+
+                <div class="glass-panel flex-1 flex flex-col bg-slate-900/90 border border-slate-800 min-h-[260px] hidden shadow-xl" id="panel-chat">
+                    <div class="flex text-xs font-black tracking-widest uppercase bg-slate-950 border-b border-slate-800">
+                        <button onclick="app.switchChatTab('team')" id="tab-team" class="flex-1 py-2.5 text-cyan-400 border-b-2 border-cyan-400 bg-slate-900/60 font-black transition">Equipe</button>
+                        <button onclick="app.switchChatTab('general')" id="tab-general" class="flex-1 py-2.5 text-slate-400 border-b-2 border-transparent hover:bg-slate-900/30 transition">Geral</button>
+                    </div>
+                    <div id="chat-messages" class="flex-1 overflow-y-auto text-xs flex flex-col gap-2 p-3.5 pr-2 break-words bg-slate-900/40 shadow-inner"></div>
+                    <form id="chat-form" onsubmit="app.sendChatMessage(event)" class="flex gap-2 p-2.5 bg-slate-950 border-t border-slate-800">
+                        <input type="text" id="chat-input" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 text-white placeholder-slate-500 transition font-medium" placeholder="Mensagem tática..." autocomplete="off" maxlength="120">
+                        <button type="submit" class="bg-cyan-700 hover:bg-cyan-600 px-4 rounded-lg text-white text-xs transition shadow"><i class="fas fa-paper-plane"></i></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-results" class="view items-center justify-center">
+        <div class="glass-panel p-12 z-10 w-full max-w-2xl flex flex-col items-center text-center shadow-[0_0_60px_rgba(0,0,0,0.9)] border-t-4 border-t-cyan-500 relative">
+            <h1 id="res-title" class="text-5xl font-black tracking-widest mb-3 text-white" style="text-shadow: 0 0 25px rgba(255,255,255,0.4);">OPERAÇÃO CONCLUÍDA</h1>
+            <p id="res-subtitle" class="text-sm text-slate-300 mb-8 uppercase tracking-widest font-extrabold">Relatório de Desempenho Tático</p>
+
+            <div id="res-cont-standard" class="w-full bg-slate-900/90 border border-slate-700 p-8 rounded-xl mb-8 hidden">
+                <div class="text-xs text-cyan-400 font-extrabold tracking-widest mb-2 uppercase">PONTUAÇÃO DA EQUIPE</div>
+                <div id="res-std-score" class="text-6xl font-black text-white mono mb-4 drop-shadow-[0_0_15px_rgba(6,182,212,0.6)]">0</div>
+                <div class="flex justify-center gap-8 border-t border-slate-800 pt-5 mt-3">
+                    <div><div class="text-[10px] text-slate-400 uppercase font-extrabold tracking-widest">Segurança Restante</div><div id="res-std-sec" class="text-xl text-white font-black mono mt-1">0%</div></div>
+                </div>
+            </div>
+
+            <div id="res-cont-versus" class="w-full flex gap-6 mb-8 hidden">
+                <div class="flex-1 bg-blue-950/50 border border-blue-900 p-6 rounded-xl relative overflow-hidden shadow-lg">
+                    <div id="res-vs-b-win" class="absolute top-3 right-3 text-yellow-400 text-2xl hidden"><i class="fas fa-crown"></i></div>
+                    <div class="text-xs text-blue-400 font-black tracking-widest uppercase mb-1">BLUE TEAM</div>
+                    <div id="res-vs-b-score" class="text-4xl font-black text-white mono mb-2">0</div>
+                    <div class="text-xs text-blue-200">Segurança: <span id="res-vs-b-sec" class="font-bold">0%</span></div>
+                </div>
+                <div class="flex-1 bg-red-950/50 border border-red-900 p-6 rounded-xl relative overflow-hidden shadow-lg">
+                    <div id="res-vs-r-win" class="absolute top-3 right-3 text-yellow-400 text-2xl hidden"><i class="fas fa-crown"></i></div>
+                    <div class="text-xs text-red-400 font-black tracking-widest uppercase mb-1">RED TEAM</div>
+                    <div id="res-vs-r-score" class="text-4xl font-black text-white mono mb-2">0</div>
+                    <div class="text-xs text-red-200">Segurança: <span id="res-vs-r-sec" class="font-bold">0%</span></div>
+                </div>
+            </div>
+
+            <!-- RESULTADOS MODO LIVRE (MÚLTIPLAS EQUIPES) -->
+            <div id="res-cont-multiteam" class="w-full mb-8 hidden">
+                <div class="text-xs text-cyan-400 font-extrabold tracking-widest mb-3 uppercase">Classificação Final das Equipes</div>
+                <div id="res-multiteam-list" class="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-2"></div>
+            </div>
+
+            <div class="w-full bg-slate-900 p-5 rounded-xl text-center mb-8 border border-slate-700">
+                <div class="text-xs text-slate-300 uppercase font-extrabold tracking-widest">Seu Desempenho Pessoal</div>
+                <div id="res-my-score" class="text-3xl font-black text-cyan-400 mono mt-1.5">0 <span class="text-sm font-bold">PTS</span></div>
+            </div>
+            <button onclick="app.exitToMainMenu()" class="btn-cyber px-12 py-4 rounded-xl text-sm font-black tracking-widest shadow-xl"><i class="fas fa-home mr-2"></i> RETORNAR AO MENU PRINCIPAL</button>
+        </div>
+    </div>
+
+    <!-- START OVERLAY -->
+    <div id="start-overlay" class="fixed inset-0 bg-black/95 z-[500] hidden flex-col items-center justify-center">
+        <h1 class="text-5xl font-black text-cyan-400 tracking-widest mb-6 border-b border-cyan-900 pb-4 uppercase" style="text-shadow: 0 0 25px rgba(6,182,212,0.5);">Preparando Operação...</h1>
+        <div id="start-countdown" class="text-9xl font-black text-white mono animate-pulse" style="text-shadow: 0 0 50px rgba(255,255,255,0.6);">3</div>
+    </div>
+
+    <!-- MODAL DE COMANDO / AÇÃO -->
+    <div id="modal-action" class="modal-overlay">
+        <div class="glass-panel p-8 w-96 flex flex-col gap-5 border border-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.4)]">
+            <h3 id="action-title" class="text-base font-black text-cyan-300 tracking-widest uppercase border-b border-slate-700 pb-3">Comando Tático</h3>
+            <div>
+                <label id="action-label" class="text-xs text-slate-300 font-bold uppercase mb-2 block">Parâmetro</label>
+                <input type="text" id="action-input" onkeydown="if(event.key === 'Enter') app.confirmAction()" class="w-full bg-slate-950 border border-slate-600 rounded-lg p-3 text-white text-xs mono focus:border-cyan-500 focus:outline-none font-bold" autocomplete="off">
+            </div>
+            <div class="flex justify-end gap-3 mt-2">
+                <button onclick="ui.hideModal('modal-action')" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition font-bold uppercase">Cancelar</button>
+                <button onclick="app.confirmAction()" class="bg-cyan-700 hover:bg-cyan-600 px-6 py-2.5 text-white text-xs rounded-lg font-bold transition shadow uppercase">Executar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CRIAR EQUIPE LIVRE -->
+    <div id="modal-create-free" class="modal-overlay">
+        <div class="glass-panel p-8 w-full max-w-md flex flex-col gap-5 border border-slate-600 relative shadow-2xl">
+            <button onclick="ui.hideModal('modal-create-free')" class="absolute top-4 right-5 text-slate-400 hover:text-white text-lg"><i class="fas fa-times"></i></button>
+            <h3 class="text-base font-black text-white tracking-widest uppercase border-b border-slate-700 pb-3"><i class="fas fa-plus mr-2 text-cyan-400"></i> Criar Equipe Livre</h3>
+            <div>
+                <label class="text-xs text-slate-300 font-bold uppercase block mb-1.5">Nome da Equipe</label>
+                <input type="text" id="free-create-name" placeholder="Ex: CyberGuardians" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white text-xs focus:border-cyan-500 focus:outline-none font-bold" maxlength="20">
+            </div>
+            <div>
+                <label class="text-xs text-slate-300 font-bold uppercase block mb-1.5">Código de Acesso (Mín. 3 Caracteres)</label>
+                <input type="text" id="free-create-code" placeholder="Ex: SEC9" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white text-sm mono uppercase font-bold tracking-wider focus:border-cyan-500 focus:outline-none" maxlength="10">
+            </div>
+            <button onclick="app.submitCreateFree()" class="bg-cyan-700 hover:bg-cyan-600 w-full py-3.5 mt-2 rounded-lg text-white text-xs font-black uppercase tracking-widest shadow transition">Criar e Entrar</button>
+        </div>
+    </div>
+
+    <!-- MODAL SALAS PÚBLICAS -->
+    <div id="modal-public-rooms" class="modal-overlay">
+        <div class="glass-panel p-8 w-full max-w-xl flex flex-col gap-5 border border-slate-600 relative h-[80vh] shadow-2xl">
+            <button onclick="ui.hideModal('modal-public-rooms')" class="absolute top-4 right-5 text-slate-400 hover:text-white text-lg"><i class="fas fa-times"></i></button>
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+                <h3 class="text-base font-black text-white tracking-widest uppercase"><i class="fas fa-search mr-2 text-cyan-400"></i> Salas Disponíveis</h3>
+                <button onclick="app.loadPublicRooms()" class="bg-slate-800 hover:bg-slate-700 px-3.5 py-1.5 rounded-lg text-xs text-slate-200 transition font-bold"><i class="fas fa-sync-alt mr-1.5"></i> Atualizar</button>
+            </div>
+            <div id="public-rooms-list" class="flex-1 overflow-y-auto space-y-3 pr-1"></div>
+        </div>
+    </div>
+
+    <!-- MODAL CÓDIGO DE ENTRADA -->
+    <div id="modal-enter-code" class="modal-overlay">
+        <div class="glass-panel p-8 w-96 flex flex-col gap-5 border border-slate-600 shadow-2xl">
+            <h3 class="text-base font-black text-white tracking-widest uppercase border-b border-slate-700 pb-3">Acesso Privado à Equipe</h3>
+            <div>
+                <label class="text-xs text-slate-300 font-bold uppercase mb-2 block">Insira o Código da Sala</label>
+                <input type="text" id="enter-code-input" class="w-full bg-slate-950 border border-slate-600 rounded-lg p-3 text-white text-base mono font-bold text-center focus:border-cyan-500 focus:outline-none uppercase tracking-widest">
+            </div>
+            <div class="flex justify-end gap-3 mt-2">
+                <button onclick="ui.hideModal('modal-enter-code')" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition font-bold uppercase">Cancelar</button>
+                <button onclick="app.submitEnterCode()" class="bg-cyan-700 hover:bg-cyan-600 px-6 py-2.5 text-white text-xs rounded-lg font-bold transition shadow uppercase">Acessar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MENU ESC -->
+    <div id="modal-esc" class="modal-overlay">
+        <div class="glass-panel p-8 w-80 flex flex-col gap-4 border border-slate-700 text-center shadow-2xl relative">
+            <h2 class="text-base font-black mb-2 tracking-widest uppercase border-b border-slate-700 pb-3 text-white">Menu Tático</h2>
+            <button onclick="ui.hideModal('modal-esc')" class="bg-slate-800 hover:bg-slate-700 text-white py-3.5 rounded-xl w-full font-bold text-xs transition uppercase tracking-widest shadow">Continuar</button>
+            <button onclick="ui.showModal('modal-settings')" class="btn-action py-3.5 rounded-xl w-full text-xs font-bold uppercase tracking-widest">Configurações</button>
+            <button onclick="ui.showModal('modal-tutorial')" class="btn-action py-3.5 rounded-xl w-full text-xs font-bold uppercase tracking-widest">Como Jogar</button>
+            <div class="h-px bg-slate-800 my-1"></div>
+            <button onclick="app.exitToMainMenu()" class="bg-red-950/60 border border-red-900 hover:bg-red-900 text-red-400 hover:text-white transition py-3.5 rounded-xl w-full font-bold text-xs uppercase tracking-widest shadow">Sair da Partida</button>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIGURAÇÕES -->
+    <div id="modal-settings" class="modal-overlay">
+        <div class="glass-panel p-8 w-80 flex flex-col gap-5 text-center border border-slate-600 relative shadow-2xl">
+            <button onclick="ui.hideModal('modal-settings')" class="absolute top-4 right-5 text-slate-400 hover:text-white text-lg"><i class="fas fa-times"></i></button>
+            <h2 class="text-base font-black tracking-widest border-b border-slate-700 pb-3 text-white uppercase">Configurações</h2>
+            
+            <label class="flex justify-between items-center text-xs bg-slate-900 p-3.5 rounded-xl border border-slate-700 cursor-pointer text-slate-200">
+                <span class="font-bold">Efeitos Sonoros (SFX)</span>
+                <input type="checkbox" id="set-sfx" checked onchange="app.toggleSfx(this.checked)" class="w-5 h-5 accent-cyan-500">
+            </label>
+
+            <label class="flex justify-between items-center text-xs bg-slate-900 p-3.5 rounded-xl border border-slate-700 cursor-pointer text-slate-200">
+                <span class="font-bold">Música Ambiente</span>
+                <input type="checkbox" id="set-music" checked onchange="app.toggleMusic(this.checked)" class="w-5 h-5 accent-cyan-500">
+            </label>
+
+            <button onclick="ui.hideModal('modal-settings')" class="bg-cyan-700 hover:bg-cyan-600 py-3.5 mt-2 rounded-xl w-full font-bold text-xs text-white uppercase tracking-widest shadow">Concluir</button>
+        </div>
+    </div>
+
+    <!-- MODAL MANUAL / COMO JOGAR -->
+    <div id="modal-tutorial" class="modal-overlay">
+        <div class="glass-panel p-10 max-w-3xl w-full max-h-[85vh] overflow-y-auto text-left border border-slate-600 relative shadow-2xl">
+            <button onclick="ui.showModal('modal-settings'); ui.hideModal('modal-tutorial');" class="absolute top-5 right-6 text-slate-400 hover:text-white text-2xl"><i class="fas fa-times"></i></button>
+            <h2 class="text-2xl font-black mb-5 tracking-widest text-cyan-400 border-b border-slate-700 pb-3 uppercase"><i class="fas fa-book mr-3"></i> Manual de Operação Tática</h2>
+            
+            <div class="space-y-6 text-slate-200 text-sm leading-relaxed">
+                <div>
+                    <h3 class="text-base font-extrabold text-cyan-300 mb-2 uppercase tracking-wide"><i class="fas fa-shield-alt mr-2"></i>1. Como Jogar (Visão Geral)</h3>
+                    <p class="mb-3">O <strong>CyberShield</strong> é um jogo de estratégia e defesa em cibersegurança. Em todos os modos de jogo, a mecânica central é a mesma: defender a infraestrutura contra incidentes cibernéticos em tempo real.</p>
+                    <ul class="list-disc list-inside space-y-1.5 text-slate-300 text-xs pl-2">
+                        <li><strong>Identifique o Incidente:</strong> Verifique o nó atacado (Servidores, DB, Firewall, WAN), a gravidade e o tempo restante.</li>
+                        <li><strong>Analise a Inteligência (INTEL):</strong> Cada função (SOC, Admin de Rede, Esp. Malware, IAM) possui pistas exclusivas. Troque informações no chat com a equipe.</li>
+                        <li><strong>Execute Comandos Táticos:</strong> Clique no comando necessário. Ações diretas funcionam instantaneamente. Se precisar digitar (como IP), pressione Enter para enviar.</li>
+                        <li><strong>Monitore a Integridade:</strong> Evite que a barra de segurança da equipe chegue a 0% antes que o tempo se esgote.</li>
+                    </ul>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4">
+                    <h3 class="text-base font-extrabold text-cyan-300 mb-2 uppercase tracking-wide"><i class="fas fa-user mr-2"></i>2. Modo Singleplayer</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">Treinamento solo em ambiente local. Você atua como <strong>Admin Universal</strong>, visualizando todas as pistas de inteligência simultaneamente.</p>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4">
+                    <h3 class="text-base font-extrabold text-cyan-300 mb-2 uppercase tracking-wide"><i class="fas fa-users mr-2"></i>3. Modo Livre (Matchmaking de Equipes)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">Operação cooperativa e competitiva assíncrona! Crie sua equipe (2 a 6 jogadores). Quando prontos, o Host clica em <strong>"Buscar Adversário"</strong>.</p>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4">
+                    <h3 class="text-base font-extrabold text-cyan-300 mb-2 uppercase tracking-wide"><i class="fas fa-crosshairs mr-2"></i>4. Modo Versus (Simétrico)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">Confronto tático direto na mesma sala entre <strong>Blue Team</strong> e <strong>Red Team</strong> nos formatos estritos (1x1, 2x2, 3x3 e 4x4).</p>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4">
+                    <h3 class="text-base font-extrabold text-red-400 mb-2 uppercase tracking-wide"><i class="fas fa-exclamation-triangle mr-2"></i>5. Regra Anti-Sabotagem (Limite de 6 Erros)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-2">Para evitar que jogadores fiquem tentando comandos aleatórios, há um limite estrito de <strong>6 erros consecutivos</strong> por operador.</p>
+                </div>
+
+                <div class="border-t border-slate-800 pt-4">
+                    <h3 class="text-base font-extrabold text-yellow-400 mb-2 uppercase tracking-wide"><i class="fas fa-network-wired mr-2"></i>6. Colapso de Topologia (Excesso de Ameaças)</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-2">A infraestrutura entra em colapso se a equipe deixar acumular muitas ameaças não concluídas simultaneamente, causando <strong>Game Over imediato</strong>. O limite ajusta-se com a dificuldade: <strong>Fácil (8)</strong>, <strong>Normal (6)</strong> e <strong>Difícil (4)</strong>.</p>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center pt-5 border-t border-slate-700">
+                <button onclick="ui.hideModal('modal-tutorial')" class="btn-cyber px-12 py-3.5 rounded-xl text-xs font-black">FECHAR MANUAL</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const appId = 'cybershield-v18'; 
+        
+        const ROLES = {
+            'soc': { id:'soc', name: 'Analista SOC', icon: 'fa-eye', color: 'text-cyan-400' },
+            'net': { id:'net', name: 'Admin Rede', icon: 'fa-network-wired', color: 'text-blue-400' },
+            'mal': { id:'mal', name: 'Esp. Malware', icon: 'fa-bug', color: 'text-red-400' },
+            'iam': { id:'iam', name: 'Analista IAM', icon: 'fa-user-lock', color: 'text-purple-400' },
+            'admin': { id:'admin', name: 'Admin Universal', icon: 'fa-crown', color: 'text-yellow-400' }
+        };
+
+        const ACTION_TYPES = {
+            'block_ip': { name: 'Bloquear IP (Firewall)', reqInput: true, label: 'IP Alvo (ex: 192.168.1.1):' },
+            'kill_proc': { name: 'Encerrar Processo', reqInput: false },
+            'reset_pwd': { name: 'Resetar Senha', reqInput: true, label: 'Usuário Alvo:' },
+            'patch_db': { name: 'Aplicar Patch DB', reqInput: false },
+            'isolate': { name: 'Isolar Sub-rede', reqInput: false }
+        };
+
+        const EVENT_TEMPLATES = [
+            { type: 'ransomware', name: 'Detecção de Ransomware', severity: 'crítico', baseTime: 90, targetNode: 'data', desc: 'Criptografia em massa detectada no banco de dados.', clues: { 'soc': 'C2 IP: 45.33.2.1', 'mal': 'Ataque ativo no DB', 'net': 'Isolar porta DB.', 'iam': 'Ignorado.' }, reqActions: ['isolate', 'kill_proc', 'block_ip'], decoyActions: ['patch_db'], inputs: { 'block_ip': '45.33.2.1' } },
+            { type: 'bruteforce', name: 'Força Bruta', severity: 'alto', baseTime: 70, targetNode: 'servers', desc: 'Múltiplas tentativas de login anômalas.', clues: { 'soc': 'Origem: 185.44.2.19', 'iam': 'Conta atacada: sysadmin', 'net': 'Travar IP.', 'mal': 'Limpo.' }, reqActions: ['block_ip', 'reset_pwd'], decoyActions: ['kill_proc'], inputs: { 'block_ip': '185.44.2.19', 'reset_pwd': 'sysadmin' } },
+            { type: 'sqli', name: 'Injeção SQL', severity: 'alto', baseTime: 60, targetNode: 'data', desc: 'Anomalias em queries ameaçando o banco de dados.', clues: { 'soc': 'Ataque de: 8.8.4.1', 'net': 'Patch emergencial no banco.', 'iam': 'Limpo.', 'mal': 'Limpo.' }, reqActions: ['block_ip', 'patch_db'], decoyActions: ['reset_pwd'], inputs: { 'block_ip': '8.8.4.1' } }
+        ];
+
+        const state = {
+            userId: null, userName: '', mode: null, roomCode: null, isHost: false, role: 'soc', myTeam: 'none',
+            roomData: null, unsubscribe: null, gameLoopInt: null, startCdInt: null, actionPending: null, nodeFilter: 'all', localScore: 0, chatTab: 'team', targetJoinCode: null, scoreSaved: false,
+            multiMode: null, multiDiff: 'normal', searchInt: null, searchTimeout: null, matchId: null, matchRooms: {}, matchUnsubscribe: null
+        };
+
+        const ui = {
+            showView: (id) => { 
+                document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.style.display = 'none'; }); 
+                const v = document.getElementById(id); v.classList.add('active'); v.style.display = 'flex';
+                document.getElementById('debug-mode').textContent = id.replace('view-', '').toUpperCase();
+            },
+            showModal: (id) => document.getElementById(id).classList.add('active'),
+            hideModal: (id) => document.getElementById(id).classList.remove('active'),
+            showStartOverlay: () => { const o = document.getElementById('start-overlay'); o.classList.remove('hidden'); o.classList.add('flex'); },
+            hideStartOverlay: () => { const o = document.getElementById('start-overlay'); o.classList.remove('flex'); o.classList.add('hidden'); },
+            sanitize: (str) => { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; },
+            toast: (msg, type = 'info') => {
+                const c = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = `toast ${type}`;
+                const icon = type === 'success' ? 'fa-check' : (type === 'error' ? 'fa-triangle-exclamation' : 'fa-info');
+                t.innerHTML = `<i class="fas ${icon}"></i> <span>${msg}</span>`; c.appendChild(t); 
+                if (type === 'success') window.soundManager.playSuccess();
+                else if (type === 'error') window.soundManager.playError();
+                setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 300); }, 3500);
+            }
+        };
+
+        const app = {
+            init: () => {
+                window.soundManager.init();
+                const savedName = localStorage.getItem('cs_operator_name');
+                if (savedName) { state.userName = savedName; document.getElementById('main-player-name').value = savedName; document.getElementById('lbl-active-operator').textContent = savedName; }
+                
+                const globalScore = localStorage.getItem('cs_global_score') || '0';
+                document.getElementById('lbl-global-score').textContent = globalScore;
+
+                if (!window.firebaseStatus.initialized) {
+                    document.getElementById('debug-auth').textContent = "OFFLINE";
+                    ui.toast("Modo Offline Ativo. Servidor Firebase não detectado.", "warning"); return;
+                }
+                const { auth, modules } = window.csFirebase;
+                modules.onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        state.userId = user.uid; document.getElementById('debug-auth').textContent = "ONLINE";
+                        document.getElementById('debug-auth').className = "text-green-500 font-bold";
+                        document.getElementById('debug-uid').textContent = user.uid.substring(0, 6);
+                    } else {
+                        await modules.signInAnonymously(auth).catch(e => {
+                            document.getElementById('debug-auth').textContent = "FALHA"; console.error("[AUTH]", e);
+                        });
+                    }
+                });
+            },
+
+            saveIdent: () => {
+                const n = document.getElementById('main-player-name').value.trim().toUpperCase();
+                if (n.length < 3) return ui.toast("Codenome muito curto (mín: 3 caracteres).", "error");
+                state.userName = n; localStorage.setItem('cs_operator_name', n);
+                document.getElementById('lbl-active-operator').textContent = n;
+                ui.toast("Identidade definida com sucesso.", "success");
+            },
+
+            resetGameState: () => {
+                state.mode = null; state.roomCode = null; state.isHost = false; state.role = 'soc'; state.myTeam = 'none'; state.localScore = 0; state.roomData = null; state.nodeFilter = 'all'; state.scoreSaved = false;
+                state.matchId = null; state.matchRooms = {};
+                if(state.gameLoopInt) { clearInterval(state.gameLoopInt); state.gameLoopInt = null; }
+                if(state.startCdInt) { clearInterval(state.startCdInt); state.startCdInt = null; }
+                if(state.searchInt) { clearInterval(state.searchInt); state.searchInt = null; }
+                if(state.searchTimeout) { clearTimeout(state.searchTimeout); state.searchTimeout = null; }
+                if(state.unsubscribe) { state.unsubscribe(); state.unsubscribe = null; }
+                if(state.matchUnsubscribe) { state.matchUnsubscribe(); state.matchUnsubscribe = null; }
+                
+                document.getElementById('events-container').innerHTML = '<div id="no-events-msg" class="h-full flex items-center justify-center flex-col gap-3.5 opacity-60"><i class="fas fa-shield-check text-6xl text-green-600"></i><p class="text-xs font-black tracking-widest text-slate-400 uppercase">Sistemas Operando Normalmente</p></div>';
+                document.getElementById('system-logs').innerHTML = '';
+                document.getElementById('chat-messages').innerHTML = '';
+                document.getElementById('ingame-team-players').innerHTML = '';
+                document.getElementById('eliminated-overlay').classList.replace('flex', 'hidden');
+                ui.hideModal('modal-esc'); ui.hideStartOverlay();
+                window.soundManager.stopAmbience();
+            },
+
+            exitToMainMenu: async () => {
+                const rc = state.roomCode; const u = state.userId; const mode = state.mode;
+                const wasPlaying = state.roomData?.status === 'playing';
+                app.resetGameState();
+
+                if (rc && u && mode !== 'single') {
+                    try {
+                        const { db, modules, csAppId } = window.csFirebase;
+                        await modules.runTransaction(db, async (t) => {
+                            const ref = modules.doc(db, 'artifacts', csAppId, 'teams', rc);
+                            const doc = await t.get(ref); if(!doc.exists()) return;
+                            const data = doc.data(); delete data.players[u];
+                            const keys = Object.keys(data.players);
+                            
+                            if(keys.length === 0) {
+                                t.delete(ref);
+                            } else { 
+                                if(data.hostId === u) data.hostId = keys.sort()[0]; 
+                                if (wasPlaying && data.mode === 'versus') {
+                                    data.status = 'results';
+                                    data.gameState.win = "Abandono de Operador Adversário";
+                                }
+                                t.set(ref, data); 
+                            }
+                        });
+                    } catch(e) {}
+                }
+                ui.showView('view-main');
+            },
+
+            selectMultiMode: (mode, diff) => {
+                if(!state.userName) return ui.toast("Defina sua identificação primeiro.", "warning");
+                state.multiMode = mode;
+                state.multiDiff = diff;
+                
+                const titleStr = mode === 'versus' ? `MODO VERSUS - ${diff}` : `MODO LIVRE - ${diff}`;
+                document.getElementById('action-step-title').innerHTML = `<i class="fas ${mode === 'versus' ? 'fa-crosshairs' : 'fa-users'} text-cyan-400 mr-3"></i> ${titleStr}`;
+                
+                document.getElementById('action-versus-box').classList.add('hidden');
+                document.getElementById('action-free-box').classList.add('hidden');
+                
+                if (mode === 'versus') document.getElementById('action-versus-box').classList.remove('hidden');
+                else document.getElementById('action-free-box').classList.remove('hidden');
+                
+                ui.showView('view-multi-action');
+            },
+
+            startSingleplayer: () => {
+                app.resetGameState();
+                state.mode = 'single'; state.role = 'admin'; state.myTeam = 'none'; state.localScore = 0;
+                const diff = document.getElementById('single-diff').value;
+                const timeMap = { 'facil': 900, 'normal': 600, 'dificil': 300 };
+                const tBase = timeMap[diff];
+
+                state.roomData = {
+                    status: 'playing', mode: 'single', name: 'INFRAESTRUTURA LOCAL', format: 0,
+                    players: { 'local': { name: state.userName || 'Admin', role: 'admin', score: 0 } },
+                    gameState: { timeRemaining: tBase, win: null },
+                    teamData: { security: 100, score: 0 }, incidents: [], logs: [{ time: Date.now(), msg: `INICIADO MODO OFFLINE (${diff.toUpperCase()})`, type: 'sys' }]
+                };
+                
+                app.setupGameUI();
+                ui.showStartOverlay();
+                window.soundManager.stopAmbience();
+
+                let cd = 3; document.getElementById('start-countdown').textContent = cd;
+                state.startCdInt = setInterval(() => {
+                    cd--; if(cd > 0) document.getElementById('start-countdown').textContent = cd;
+                    else {
+                        clearInterval(state.startCdInt); state.startCdInt = null; ui.hideStartOverlay();
+                        app.genLocalIncident(); state.gameLoopInt = setInterval(app.singleplayerLoop, 1000);
+                    }
+                }, 1000);
+            },
+
+            singleplayerLoop: () => {
+                let d = state.roomData; if(!d) return;
+                d.gameState.timeRemaining--;
+                const diff = document.getElementById('single-diff').value;
+                const tickRate = diff === 'facil' ? 30 : (diff === 'dificil' ? 15 : 25);
+                
+                const maxIncMap = { 'facil': 8, 'normal': 6, 'dificil': 4 };
+                const maxInc = maxIncMap[diff] || 6;
+
+                if (d.gameState.timeRemaining % tickRate === 0 && d.incidents.length < maxInc) app.genLocalIncident();
+
+                if (d.incidents.length >= maxInc) {
+                    d.teamData.security = 0;
+                    d.logs.push({ time: Date.now(), msg: `[COLAPSO DE REDE] Limite de ${maxInc} ameaças ativas atingido! Topologia comprometida!`, type: 'err' });
+                    ui.toast(`COLAPSO DE REDE: Excesso de incidentes ativos (${maxInc})!`, "error");
+                    clearInterval(state.gameLoopInt); state.gameLoopInt = null; app.renderResults(); return;
+                }
+
+                for (let i = d.incidents.length - 1; i >= 0; i--) {
+                    d.incidents[i].timeLeft--;
+                    if (d.incidents[i].timeLeft <= 0) {
+                        d.teamData.security = Math.max(0, d.teamData.security - 25);
+                        d.logs.push({ time: Date.now(), msg: `[FALHA] Defesa rompida: ${d.incidents[i].name}`, type: 'err' });
+                        d.incidents.splice(i, 1);
+                        window.soundManager.playError();
+                    }
+                }
+                if (d.teamData.security <= 0 || d.gameState.timeRemaining <= 0) { 
+                    clearInterval(state.gameLoopInt); state.gameLoopInt = null; app.renderResults(); return; 
+                }
+                app.renderGame();
+            },
+
+            genLocalIncident: () => {
+                const tpl = EVENT_TEMPLATES[Math.floor(Math.random() * EVENT_TEMPLATES.length)];
+                state.roomData.incidents.push({ id: Math.random().toString(36).substr(2), ...tpl, timeLeft: tpl.baseTime, completed: [] });
+                state.roomData.logs.push({ time: Date.now(), msg: `[ALERTA] Novo ataque em ${tpl.targetNode.toUpperCase()}`, type: 'err' });
+                window.soundManager.playError();
+                ui.toast(`⚠ NOVO INCIDENTE: ${tpl.name} (${tpl.severity.toUpperCase()})`, 'warning');
+                app.renderGame();
+            },
+
+            joinVersus: async (format) => {
+                try {
+                    ui.toast(`Buscando partida Versus ${format}x${format} (${state.multiDiff})...`, "info");
+                    const { db, modules, csAppId } = window.csFirebase;
+                    const q = modules.query(modules.collection(db, 'artifacts', csAppId, 'teams'), 
+                        modules.where('mode', '==', 'versus'),
+                        modules.where('difficulty', '==', state.multiDiff)
+                    );
+                    const snap = await modules.getDocs(q);
+                    
+                    let targetCode = null; const now = Date.now();
+                    for (let d of snap.docs) {
+                        const r = d.data();
+                        if (r.status === 'lobby' && r.format === format && (now - r.createdAt < 7200000)) {
+                            const pCount = Object.keys(r.players || {}).length;
+                            if (pCount < (format * 2)) { targetCode = r.code; break; }
+                        }
+                    }
+
+                    if (targetCode) await app.processJoinOrCreate(targetCode, 'versus', null);
+                    else {
+                        const code = `VS-${format}V${format}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+                        await app.processJoinOrCreate(code, 'versus', { format, isCreate: true });
+                    }
+                } catch(e) { ui.toast("Erro no Matchmaking Versus.", "error"); }
+            },
+
+            switchVersusTeam: async (targetTeam) => {
+                if(!state.roomCode || state.myTeam === targetTeam) return;
+                try {
+                    const { db, modules, csAppId } = window.csFirebase;
+                    const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                    await modules.runTransaction(db, async (t) => {
+                        const doc = await t.get(ref); if(!doc.exists()) return; const data = doc.data();
+                        let count = 0; Object.values(data.players).forEach(p => { if(p.team === targetTeam) count++; });
+                        if(count >= data.format) throw new Error("Este time está cheio!");
+                        data.players[state.userId].team = targetTeam; data.players[state.userId].ready = false; t.set(ref, data);
+                    });
+                } catch(e) { ui.toast(e.message, "error"); }
+            },
+
+            submitCreateFree: async () => {
+                const name = document.getElementById('free-create-name').value.trim() || "Equipe Alpha";
+                const code = document.getElementById('free-create-code').value.trim().toUpperCase();
+                if (code.length < 3) return ui.toast("Código mínimo de 3 caracteres.", "error");
+                ui.hideModal('modal-create-free');
+                await app.processJoinOrCreate(code, 'free', { name, format: 0, isCreate: true });
+            },
+
+            joinFreeByInput: () => {
+                const code = document.getElementById('direct-room-code').value.trim().toUpperCase();
+                if (code) app.processJoinOrCreate(code, 'free', null);
+            },
+
+            openPublicRoomsModal: () => {
+                ui.showModal('modal-public-rooms'); app.loadPublicRooms();
+            },
+
+            loadPublicRooms: async () => {
+                const c = document.getElementById('public-rooms-list');
+                c.innerHTML = '<div class="text-slate-400 text-center py-4 text-xs font-bold">Buscando salas disponíveis...</div>';
+                try {
+                    const { db, modules, csAppId } = window.csFirebase;
+                    const q = modules.query(modules.collection(db, 'artifacts', csAppId, 'teams'), 
+                        modules.where('mode', '==', 'free'),
+                        modules.where('difficulty', '==', state.multiDiff)
+                    );
+                    const snap = await modules.getDocs(q);
+                    
+                    let html = ''; const now = Date.now();
+                    snap.docs.forEach(d => {
+                        const r = d.data(); const pCount = Object.keys(r.players||{}).length;
+                        if (r.status === 'lobby' && pCount > 0 && pCount < 6 && (now - r.createdAt < 7200000)) {
+                            html += `<div class="bg-slate-900 border border-slate-700 p-4 rounded-xl flex justify-between items-center mb-3 shadow">
+                                <div>
+                                    <div class="font-extrabold text-cyan-300 text-sm">EQUIPE: ${ui.sanitize(r.name)}</div>
+                                    <div class="text-xs text-slate-300 font-bold mt-1">Operadores: <span class="text-cyan-400">${pCount}/6</span> | Código: <span class="mono text-yellow-400 font-black">${r.code}</span></div>
+                                </div>
+                                <button onclick="app.promptCodeForRoom('${r.code}')" class="bg-cyan-700 hover:bg-cyan-600 px-5 py-2.5 rounded-lg text-white text-xs font-black transition shadow">Entrar</button>
+                            </div>`;
+                        }
+                    });
+                    c.innerHTML = html || '<div class="text-slate-400 text-center py-6 text-xs font-bold">Nenhuma equipe com vagas disponível para esta dificuldade. Crie a sua!</div>';
+                } catch (e) { c.innerHTML = `<div class="text-red-400 text-center text-xs font-bold">Erro ao buscar salas.</div>`; }
+            },
+
+            promptCodeForRoom: (code) => {
+                state.targetJoinCode = code; document.getElementById('enter-code-input').value = '';
+                ui.hideModal('modal-public-rooms'); ui.showModal('modal-enter-code');
+            },
+
+            submitEnterCode: () => {
+                const typed = document.getElementById('enter-code-input').value.trim().toUpperCase();
+                if(typed !== state.targetJoinCode) { ui.toast("Código incorreto.", "error"); return; }
+                ui.hideModal('modal-enter-code'); app.processJoinOrCreate(state.targetJoinCode, 'free', null);
+            },
+
+            processJoinOrCreate: async (code, mode, createData) => {
+                if (!state.userId) return;
+                const { db, modules, csAppId } = window.csFirebase;
+                const ref = modules.doc(db, 'artifacts', csAppId, 'teams', code);
+                
+                try {
+                    const res = await modules.runTransaction(db, async (t) => {
+                        const doc = await t.get(ref);
+                        const now = Date.now();
+                        
+                        let shouldCreate = false;
+                        if (!doc.exists()) {
+                            shouldCreate = true;
+                        } else {
+                            const data = doc.data();
+                            const isOld = (now - data.createdAt > 7200000) || data.status === 'results';
+                            
+                            if (createData && createData.isCreate) {
+                                if (isOld || Object.keys(data.players).length === 0) {
+                                    shouldCreate = true;
+                                } else {
+                                    return { ok: false, msg: "Código já em uso por uma equipe ativa. Escolha outro." };
+                                }
+                            } else if (isOld) {
+                                return { ok: false, msg: "Esta sala já foi encerrada ou expirou." };
+                            } else if (data.mode !== mode) {
+                                return { ok: false, msg: "Modo de jogo incompatível." };
+                            } else if (data.status !== 'lobby') {
+                                return { ok: false, msg: "A partida já foi iniciada." };
+                            }
+                        }
+
+                        if (shouldCreate) {
+                            if (!createData) return { ok: false, msg: "Sala não encontrada." };
+                            const isVs = mode === 'versus';
+                            const initialData = {
+                                code, mode, status: 'lobby', hostId: state.userId, createdAt: now,
+                                format: createData.format, name: createData.name || code, difficulty: state.multiDiff,
+                                players: { [state.userId]: { name: state.userName, role: 'soc', team: isVs ? 'blue' : 'none', ready: false, score: 0, isEliminated: false, consecutiveErrors: 0 } },
+                                gameState: { timeRemaining: isVs ? 600 : (state.multiDiff === 'facil' ? 900 : (state.multiDiff === 'normal' ? 600 : 300)), win: null },
+                                teamData: isVs ? { blue: { security: 100, score: 0 }, red: { security: 100, score: 0 } } : { security: 100, score: 0 },
+                                incidents: isVs ? { blue: [], red: [] } : [], logs: [{ time: Date.now(), msg: 'SALA INSTANCIADA', type: 'sys' }], chat: []
+                            };
+                            t.set(ref, initialData); return { ok: true, isHost: true, team: isVs ? 'blue' : 'none' };
+                        } else {
+                            const data = doc.data();
+                            
+                            const pKeys = Object.keys(data.players);
+                            const maxLimit = mode === 'free' ? 6 : (data.format * 2);
+                            if (pKeys.length >= maxLimit && !data.players[state.userId]) return { ok: false, msg: "Sala lotada." };
+                            
+                            let aTeam = 'none';
+                            if (mode === 'versus') {
+                                if (data.players[state.userId]) aTeam = data.players[state.userId].team;
+                                else { let b=0, r=0; Object.values(data.players).forEach(p => p.team === 'blue' ? b++ : r++); aTeam = (b <= r) ? 'blue' : 'red'; }
+                            }
+                            
+                            if (!data.players[state.userId]) {
+                                data.players[state.userId] = { name: state.userName, role: 'soc', team: aTeam, ready: false, score: 0, isEliminated: false, consecutiveErrors: 0 }; t.set(ref, data);
+                            }
+                            return { ok: true, isHost: false, team: aTeam };
+                        }
+                    });
+
+                    if (!res.ok) return ui.toast(res.msg, "error");
+                    state.roomCode = code; state.mode = mode; state.myTeam = res.team; app.listenRoom();
+                    ui.showView(mode === 'free' ? 'view-lobby-free' : 'view-lobby-versus');
+                    window.soundManager.playNotification();
+                } catch(e) { ui.toast("Falha na conexão com o servidor.", "error"); }
+            },
+
+            listenRoom: () => {
+                if (state.unsubscribe) state.unsubscribe();
+                const { db, modules, csAppId } = window.csFirebase;
+                const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                
+                state.unsubscribe = modules.onSnapshot(ref, (snap) => {
+                    if (!snap.exists()) { app.exitToMainMenu(); ui.toast("A sala foi encerrada.", "warning"); return; }
+                    const data = snap.data(); const oldStatus = state.roomData ? state.roomData.status : null;
+                    state.roomData = data; state.mode = data.mode; state.isHost = data.hostId === state.userId;
+                    
+                    if (data.players[state.userId]) {
+                        state.role = data.players[state.userId].role; state.myTeam = data.players[state.userId].team || 'none'; state.localScore = data.players[state.userId].score || 0;
+                        if(data.players[state.userId].isEliminated) {
+                             document.getElementById('eliminated-overlay').classList.replace('hidden', 'flex');
+                        }
+                    }
+
+                    if (data.matchId && !state.matchUnsubscribe) {
+                        const qMatch = modules.query(modules.collection(db, 'artifacts', csAppId, 'teams'), modules.where('matchId', '==', data.matchId));
+                        state.matchUnsubscribe = modules.onSnapshot(qMatch, (mSnap) => {
+                            state.matchRooms = {};
+                            mSnap.docs.forEach(d => { state.matchRooms[d.id] = d.data(); });
+                            if (state.mode === 'free' && (state.roomData?.status === 'playing' || state.roomData?.status === 'results')) {
+                                if (state.roomData.status === 'playing') app.renderGame();
+                                else app.renderResults();
+                            }
+                        });
+                    }
+
+                    if (data.status === 'lobby') { if (data.mode === 'free') app.renderLobbyFree(); else if (data.mode === 'versus') app.renderLobbyVersus(); } 
+                    else if (data.status === 'searching' && oldStatus !== 'searching') { app.renderLobbyFree(); }
+                    else if (data.status === 'starting' && oldStatus !== 'starting') { app.handleStarting(); }
+                    else if (data.status === 'playing') {
+                        if (oldStatus !== 'playing' && oldStatus !== 'searching') { ui.hideStartOverlay(); app.setupGameUI(); }
+                        app.renderGame();
+                        if (state.isHost && !state.gameLoopInt) state.gameLoopInt = setInterval(app.hostGameTick, 1000);
+                    }
+                    else if (data.status === 'results') { if(state.gameLoopInt) { clearInterval(state.gameLoopInt); state.gameLoopInt = null; } ui.hideStartOverlay(); app.renderResults(); }
+                });
+            },
+
+            changeRole: async (val) => {
+                if(!state.roomCode) return;
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    await modules.runTransaction(db, async (t) => {
+                        const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                        const doc = await t.get(ref); if(!doc.exists()) return; const data = doc.data();
+                        data.players[state.userId].role = val; data.players[state.userId].ready = false; t.set(ref, data);
+                    });
+                } catch(e) { ui.toast("Erro ao trocar função.", "error"); }
+            },
+
+            changeDifficulty: async (val) => {
+                if(!state.roomCode || !state.isHost) return;
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                    await modules.updateDoc(ref, { difficulty: val });
+                    ui.toast(`Dificuldade alterada para: ${val.toUpperCase()}`, "info");
+                } catch(e) { ui.toast("Erro ao alterar dificuldade.", "error"); }
+            },
+
+            toggleReady: async () => {
+                if(!state.roomCode) return;
+                const { db, modules, csAppId } = window.csFirebase;
+                const cur = state.roomData.players[state.userId].ready;
+                await modules.updateDoc(modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode), { [`players.${state.userId}.ready`]: !cur });
+            },
+
+            renderLobbyFree: () => {
+                const d = state.roomData; const p = d.players || {}; const keys = Object.keys(p);
+                document.getElementById('lob-free-name').textContent = d.name; document.getElementById('lob-free-code').textContent = d.code; document.getElementById('lob-free-count').textContent = `${keys.length}/6`;
+                
+                if (state.isHost) { document.getElementById('lob-free-diff-box').classList.remove('hidden'); document.getElementById('lob-free-diff').value = d.difficulty || 'normal'; } 
+                else document.getElementById('lob-free-diff-box').classList.add('hidden');
+
+                let html = ''; let allReady = true;
+                keys.forEach(uid => {
+                    const pl = p[uid]; if(!pl.ready) allReady = false;
+                    const rObj = ROLES[pl.role] || ROLES['soc']; const hostIcon = (uid === d.hostId) ? '<i class="fas fa-crown text-yellow-400 ml-2" title="Admin"></i>' : '';
+                    const badge = pl.ready ? '<span class="text-green-400 text-xs font-bold"><i class="fas fa-check mr-1"></i> PRONTO</span>' : '<span class="text-slate-400 text-xs font-bold"><i class="fas fa-clock mr-1"></i> AGUARDANDO</span>';
+                    html += `<div class="flex justify-between items-center p-3 rounded-xl bg-slate-800/70 border border-slate-700"><div class="flex items-center text-xs"><i class="fas ${rObj.icon} ${rObj.color} w-6 text-base"></i><span class="font-extrabold text-slate-100">${ui.sanitize(pl.name)}</span>${hostIcon}</div>${badge}</div>`;
+                });
+                document.getElementById('lob-free-list').innerHTML = html;
+
+                const isMeReady = p[state.userId]?.ready; const btnR = document.getElementById('btn-free-ready');
+                const btnSearch = document.getElementById('btn-free-search');
+                const btnCancel = document.getElementById('btn-free-cancel-search');
+                const stat = document.getElementById('lob-free-status');
+
+                btnR.textContent = isMeReady ? "CANCELAR" : "ESTOU PRONTO";
+                btnR.className = isMeReady ? "w-full py-3.5 rounded-lg border-2 border-slate-600 text-slate-400 font-bold hover:bg-slate-800 transition uppercase text-xs" : "w-full py-3.5 rounded-lg border-2 border-green-600 text-green-500 font-extrabold hover:bg-green-900 transition uppercase text-xs";
+
+                const canStart = keys.length >= 2 && keys.length <= 6 && allReady;
+
+                btnSearch.classList.add('hidden'); btnCancel.classList.add('hidden');
+
+                if (state.isHost) {
+                    if (d.status === 'searching') {
+                        btnR.classList.add('hidden');
+                        btnCancel.classList.remove('hidden');
+                        stat.classList.remove('hidden');
+                        stat.textContent = "BUSCANDO EQUIPES ADVERSÁRIAS...";
+                    } else {
+                        btnR.classList.remove('hidden');
+                        btnSearch.classList.toggle('hidden', !canStart); 
+                        stat.classList.toggle('hidden', canStart);
+                        stat.textContent = keys.length < 2 ? "MÍNIMO DE 2 OPERADORES" : (!allReady ? "AGUARDANDO TODOS" : "");
+                    }
+                } else { 
+                    if (d.status === 'searching') {
+                        btnR.classList.add('hidden');
+                        stat.classList.remove('hidden');
+                        stat.textContent = "O HOST ESTÁ BUSCANDO ADVERSÁRIO...";
+                    } else {
+                        btnR.classList.remove('hidden');
+                        stat.classList.remove('hidden'); 
+                        stat.textContent = !allReady ? "AGUARDANDO TODOS" : "AGUARDANDO HOST"; 
+                    }
+                }
+            },
+
+            hostSearchOpponent: async () => {
+                if(!state.isHost) return;
+                const keys = Object.keys(state.roomData.players);
+                if (keys.length < 2 || keys.length > 6) {
+                    ui.toast("A equipe precisa ter entre 2 e 6 operadores para buscar adversário.", "warning");
+                    return;
+                }
+
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    await modules.updateDoc(modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode), { status: 'searching' });
+                    
+                    state.searchTimeout = setTimeout(() => {
+                        if (state.roomData?.status === 'searching') {
+                            app.cancelSearch();
+                            app.exitToMainMenu();
+                            ui.toast("Tempo limite de 5 minutos excedido. Nenhuma equipe adversária encontrada.", "error");
+                        }
+                    }, 300000);
+                    
+                    state.searchInt = setInterval(async () => {
+                        const q = modules.query(modules.collection(db, 'artifacts', csAppId, 'teams'), 
+                            modules.where('mode', '==', 'free')
+                        );
+                        const snap = await modules.getDocs(q);
+                        let foundMatchId = null;
+                        let enemyRoomId = null;
+                        let isEnemySearching = false;
+
+                        snap.docs.forEach(d => {
+                            if (d.id !== state.roomCode) {
+                                const r = d.data();
+                                if (r.difficulty === state.roomData.difficulty) {
+                                    const pCount = Object.keys(r.players || {}).length;
+                                    if (pCount >= 2 && pCount <= 6) {
+                                        if (r.status === 'playing') {
+                                            foundMatchId = r.matchId || d.id;
+                                        } else if (r.status === 'searching' && !foundMatchId) {
+                                            foundMatchId = d.id;
+                                            enemyRoomId = d.id;
+                                            isEnemySearching = true;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                        
+                        if (foundMatchId) {
+                            clearInterval(state.searchInt); state.searchInt = null;
+                            if (state.searchTimeout) { clearTimeout(state.searchTimeout); state.searchTimeout = null; }
+
+                            await modules.runTransaction(db, async (t) => {
+                                 const meRef = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                                 const meDoc = await t.get(meRef);
+                                 if (meDoc.exists() && meDoc.data().status === 'searching') {
+                                      let meD = meDoc.data();
+                                      meD.status = 'starting';
+                                      meD.matchId = foundMatchId;
+                                      t.set(meRef, meD);
+                                 }
+                                 
+                                 if (isEnemySearching) {
+                                     const enRef = modules.doc(db, 'artifacts', csAppId, 'teams', enemyRoomId);
+                                     const enDoc = await t.get(enRef);
+                                     if (enDoc.exists() && enDoc.data().status === 'searching') {
+                                         let enD = enDoc.data();
+                                         enD.status = 'starting';
+                                         enD.matchId = foundMatchId;
+                                         t.set(enRef, enD);
+                                     }
+                                 }
+                            });
+                        }
+                    }, 4000);
+                } catch(e) {}
+            },
+
+            cancelSearch: async () => {
+                if(!state.isHost) return;
+                if(state.searchInt) { clearInterval(state.searchInt); state.searchInt = null; }
+                if(state.searchTimeout) { clearTimeout(state.searchTimeout); state.searchTimeout = null; }
+                const { db, modules, csAppId } = window.csFirebase;
+                await modules.updateDoc(modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode), { status: 'lobby' });
+            },
+
+            renderLobbyVersus: () => {
+                const d = state.roomData; const p = d.players || {};
+                document.getElementById('lob-vs-format').textContent = `${d.format}x${d.format}`; document.getElementById('lob-vs-code').textContent = d.code;
+
+                let bCount=0, rCount=0, allReady=true; let bHtml='', rHtml='';
+                Object.keys(p).forEach(uid => {
+                    const pl = p[uid]; if(!pl.ready) allReady = false;
+                    const rObj = ROLES[pl.role] || ROLES['soc']; const badge = pl.ready ? '<i class="fas fa-check-circle text-green-400"></i>' : '<i class="fas fa-circle-notch text-slate-500"></i>';
+                    const el = `<div class="flex justify-between items-center p-3 rounded-xl bg-slate-800/70 border border-slate-700"><div class="flex items-center text-xs"><i class="fas ${rObj.icon} ${rObj.color} w-5 text-sm"></i><span class="font-extrabold text-slate-100">${ui.sanitize(pl.name)}</span></div>${badge}</div>`;
+                    if (pl.team === 'blue') { bCount++; bHtml+=el; } else { rCount++; rHtml+=el; }
+                });
+
+                document.getElementById('lob-vs-bcount').textContent = `(${bCount}/${d.format})`; document.getElementById('lob-vs-rcount').textContent = `(${rCount}/${d.format})`;
+                document.getElementById('lob-vs-blist').innerHTML = bHtml; document.getElementById('lob-vs-rlist').innerHTML = rHtml;
+
+                const isMeReady = p[state.userId]?.ready; const btnR = document.getElementById('btn-vs-ready');
+                btnR.textContent = isMeReady ? "CANCELAR" : "ESTOU PRONTO";
+                btnR.className = isMeReady ? "w-full py-3.5 rounded-lg border-2 border-slate-600 text-slate-400 font-bold transition uppercase text-xs shadow-none" : "w-full py-3.5 rounded-lg border-2 border-green-600 text-green-500 font-extrabold transition uppercase text-xs shadow-[0_0_20px_rgba(22,163,74,0.3)]";
+
+                if (state.isHost && bCount === d.format && rCount === d.format && allReady && d.status === 'lobby') { 
+                    app.triggerGameStart(); 
+                }
+            },
+
+            triggerGameStart: async () => { const { db, modules, csAppId } = window.csFirebase; await modules.updateDoc(modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode), { status: 'starting' }); },
+
+            handleStarting: () => {
+                ui.showStartOverlay();
+                window.soundManager.stopAmbience();
+
+                if (state.startCdInt) clearInterval(state.startCdInt);
+                let cd = 3; document.getElementById('start-countdown').textContent = cd;
+                state.startCdInt = setInterval(async () => {
+                    cd--; if (cd > 0) document.getElementById('start-countdown').textContent = cd;
+                    else {
+                        clearInterval(state.startCdInt); state.startCdInt = null;
+                        if (state.isHost) {
+                            const { db, modules, csAppId } = window.csFirebase;
+                            await modules.runTransaction(db, async (t) => {
+                                const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                                const doc = await t.get(ref); if(!doc.exists()) return; const data = doc.data(); data.status = 'playing';
+                                const diffMap = { 'facil': 100, 'normal': 70, 'dificil': 50 };
+                                const baseInc = { id: Math.random().toString(36).substr(2), ...EVENT_TEMPLATES[0], timeLeft: diffMap[data.difficulty] || 70, completed: [] };
+                                if (data.mode === 'free') data.incidents = [baseInc]; else data.incidents = { blue: [{...baseInc}], red: [{...baseInc, id: Math.random().toString(36).substr(2)}] };
+                                data.logs.push({ time: Date.now(), msg: 'SISTEMAS ONLINE. PROTEJA A INFRAESTRUTURA.', type: 'sys' }); t.set(ref, data);
+                            });
+                        }
+                    }
+                }, 1000);
+            },
+
+            hostGameTick: async () => {
+                if(!state.isHost || !state.roomCode) return;
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    await modules.runTransaction(db, async (t) => {
+                        const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                        const doc = await t.get(ref); if(!doc.exists()) return; const data = doc.data(); if(data.status !== 'playing') return;
+
+                        data.gameState.timeRemaining--;
+                        
+                        const maxIncMap = { 'facil': 8, 'normal': 6, 'dificil': 4 };
+                        const maxInc = maxIncMap[data.difficulty] || 6;
+
+                        const procIncidents = (incList, teamObj, logPrefix) => {
+                            if (data.gameState.timeRemaining % 30 === 0 && incList.length < maxInc) {
+                                const tpl = EVENT_TEMPLATES[Math.floor(Math.random() * EVENT_TEMPLATES.length)];
+                                const diffMap = { 'facil': 100, 'normal': 70, 'dificil': 50 };
+                                incList.push({ id: Math.random().toString(36).substr(2), ...tpl, timeLeft: diffMap[data.difficulty] || 70, completed: [] });
+                                data.logs.push({ time: Date.now(), msg: `[ALERTA] Novo ataque em andamento ${logPrefix}`, type: 'err' });
+                            }
+
+                            if (incList.length >= maxInc) {
+                                teamObj.security = 0;
+                                data.logs.push({ time: Date.now(), msg: `[COLAPSO DE REDE] Limite de ${maxInc} ameaças ativas atingido ${logPrefix}!`, type: 'err' });
+                            }
+
+                            for (let i = incList.length - 1; i >= 0; i--) {
+                                incList[i].timeLeft--;
+                                if (incList[i].timeLeft <= 0) {
+                                    teamObj.security = Math.max(0, teamObj.security - 25);
+                                    data.logs.push({ time: Date.now(), msg: `[FALHA] Defesa rompida ${logPrefix}`, type: 'err' });
+                                    incList.splice(i, 1);
+                                }
+                            }
+                        };
+
+                        if (data.mode === 'free') { procIncidents(data.incidents, data.teamData, ''); if (data.teamData.security <= 0 || data.gameState.timeRemaining <= 0) data.status = 'results'; } 
+                        else {
+                            procIncidents(data.incidents.blue, data.teamData.blue, '(Blue Team)'); procIncidents(data.incidents.red, data.teamData.red, '(Red Team)');
+                            if (data.gameState.timeRemaining <= 0 || (data.teamData.blue.security <= 0 && data.teamData.red.security <= 0)) data.status = 'results';
+                        }
+                        if(data.logs.length > 50) data.logs = data.logs.slice(-50);
+                        t.set(ref, data);
+                    });
+                } catch(e) {}
+            },
+
+            setupGameUI: () => {
+                ui.showView('view-game');
+                const rObj = ROLES[state.role] || ROLES['soc'];
+                document.getElementById('game-player-role').textContent = rObj.name; document.getElementById('game-player-role').className = `text-xs font-black uppercase tracking-wider ${rObj.color}`;
+                document.getElementById('ingame-role-icon').className = `fas ${rObj.icon} text-2xl ${rObj.color}`;
+
+                const lbl = document.getElementById('game-mode-label'); const pRoster = document.getElementById('panel-team-roster'); const pChat = document.getElementById('panel-chat');
+                const cStd = document.getElementById('score-container-standard'); const cVs = document.getElementById('score-container-versus');
+                const cMulti = document.getElementById('score-container-free-multi');
+
+                if (state.mode === 'single') {
+                    lbl.textContent = "SINGLEPLAYER"; cStd.classList.remove('hidden'); cVs.classList.add('hidden'); cMulti.classList.add('hidden');
+                    document.getElementById('std-team-name').textContent = "INFRAESTRUTURA"; pRoster.classList.add('hidden'); pChat.classList.add('hidden');
+                } else if (state.mode === 'free') {
+                    if (state.roomData?.matchId) {
+                        lbl.textContent = "LIVRE (BATALHA DE EQUIPES)"; cStd.classList.add('hidden'); cVs.classList.add('hidden'); cMulti.classList.remove('hidden');
+                        pRoster.classList.remove('hidden'); pChat.classList.remove('hidden');
+                    } else {
+                        lbl.textContent = "MODO LIVRE SOLO"; cStd.classList.remove('hidden'); cVs.classList.add('hidden'); cMulti.classList.add('hidden');
+                        document.getElementById('std-team-name').textContent = state.roomData?.name || "EQUIPE"; pRoster.classList.remove('hidden'); pChat.classList.remove('hidden');
+                    }
+                } else if (state.mode === 'versus') {
+                    lbl.textContent = `VERSUS (${state.myTeam})`; cStd.classList.add('hidden'); cVs.classList.remove('hidden'); cMulti.classList.add('hidden'); pChat.classList.remove('hidden');
+                    if(state.roomData?.format === 1) pRoster.classList.add('hidden'); else pRoster.classList.remove('hidden');
+                }
+            },
+
+            renderGame: () => {
+                const d = state.roomData; if(!d) return;
+
+                const tr = Math.max(0, d.gameState?.timeRemaining || 0);
+                document.getElementById('game-timer').textContent = `${Math.floor(tr/60).toString().padStart(2,'0')}:${(tr%60).toString().padStart(2,'0')}`;
+                document.getElementById('game-personal-score').textContent = state.localScore;
+
+                if (state.mode === 'single' || (state.mode === 'free' && !d.matchId)) {
+                    const sec = d.teamData?.security || 0;
+                    document.getElementById('std-bar-sec').style.width = sec + '%';
+                    document.getElementById('std-bar-sec').className = `h-full w-full transition-all duration-500 ${sec < 30 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-600 to-cyan-400'}`;
+                    document.getElementById('std-team-score').textContent = (d.teamData?.score || 0) + " PTS";
+                } else if (state.mode === 'versus') {
+                    document.getElementById('vs-name-blue').textContent = "BLUE TEAM"; document.getElementById('vs-name-red').textContent = "RED TEAM";
+                    document.getElementById('vs-bar-blue').style.width = (d.teamData?.blue?.security || 0) + '%'; document.getElementById('vs-blue-score').textContent = (d.teamData?.blue?.score || 0) + " PTS";
+                    document.getElementById('vs-bar-red').style.width = (d.teamData?.red?.security || 0) + '%'; document.getElementById('vs-red-score').textContent = (d.teamData?.red?.score || 0) + " PTS";
+                } else if (state.mode === 'free' && d.matchId) {
+                    const cMulti = document.getElementById('score-container-free-multi');
+                    let html = '';
+                    const rooms = Object.values(state.matchRooms).sort((a,b) => {
+                        if (b.teamData.security !== a.teamData.security) return b.teamData.security - a.teamData.security;
+                        return b.teamData.score - a.teamData.score;
+                    });
+
+                    rooms.forEach(r => {
+                        const isMe = r.code === state.roomCode;
+                        const sec = r.teamData?.security || 0;
+                        const pts = r.teamData?.score || 0;
+                        html += `
+                        <div class="flex-1 min-w-[150px] max-w-[200px] ${isMe ? 'bg-cyan-950/40 border-cyan-700' : 'bg-slate-900/40 border-slate-700'} border p-2 rounded-xl shadow-inner">
+                            <div class="flex justify-between items-end mb-1 px-1">
+                                <span class="text-[10px] font-black ${isMe ? 'text-cyan-400' : 'text-slate-400'} tracking-widest uppercase truncate max-w-[90px]" title="${ui.sanitize(r.name)}">${ui.sanitize(r.name)}</span>
+                                <span class="${isMe ? 'text-cyan-300' : 'text-slate-300'} font-black text-xs mono">${pts}</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800"><div class="${sec < 30 ? 'bg-red-500' : (isMe ? 'bg-cyan-500' : 'bg-slate-500')} h-full w-full transition-all duration-500" style="width: ${sec}%"></div></div>
+                        </div>`;
+                    });
+                    cMulti.innerHTML = html;
+                }
+
+                if (state.mode !== 'single' && !(state.mode === 'versus' && d.format === 1)) {
+                    let teamHtml = '';
+                    Object.keys(d.players||{}).forEach(uid => {
+                        const pl = d.players[uid]; if (state.mode === 'versus' && pl.team !== state.myTeam) return;
+                        const rObj = ROLES[pl.role] || ROLES['soc']; const hIco = (uid === d.hostId) ? '<i class="fas fa-crown text-yellow-400 ml-1.5" title="Admin"></i>' : '';
+                        const elimIco = pl.isEliminated ? '<i class="fas fa-user-slash text-red-500 ml-1.5" title="Eliminado"></i>' : '';
+                        teamHtml += `<div class="flex items-center gap-2.5 bg-slate-950 p-2.5 rounded-xl border border-slate-800"><i class="fas ${rObj.icon} ${rObj.color} w-5 text-center text-sm"></i><div class="flex-1 truncate text-xs font-bold ${pl.isEliminated ? 'text-slate-500 line-through' : 'text-slate-200'}">${ui.sanitize(pl.name)}${hIco}${elimIco}</div><div class="text-xs mono ${pl.isEliminated ? 'text-slate-600' : 'text-cyan-400'} font-extrabold">${pl.score||0}</div></div>`;
+                    });
+                    document.getElementById('ingame-team-players').innerHTML = teamHtml;
+                }
+
+                app.renderIncidents(); app.renderTopology(); app.renderLogs();
+                if(state.mode !== 'single') app.renderChat();
+            },
+
+            renderIncidents: () => {
+                const c = document.getElementById('events-container');
+                let list = []; if(state.mode === 'single' || state.mode === 'free') list = state.roomData?.incidents || []; else list = (state.roomData?.incidents || {})[state.myTeam] || [];
+                document.getElementById('active-events-count').textContent = list.length;
+                
+                const curDiff = state.mode === 'single' ? (document.getElementById('single-diff')?.value || 'normal') : (state.roomData?.difficulty || 'normal');
+                const maxIncMap = { 'facil': 8, 'normal': 6, 'dificil': 4 };
+                const maxInc = maxIncMap[curDiff] || 6;
+                const maxEl = document.getElementById('max-events-limit');
+                if (maxEl) maxEl.textContent = maxInc;
+
+                if(list.length === 0) {
+                    c.innerHTML = '<div class="h-full flex items-center justify-center flex-col gap-3.5 opacity-60"><i class="fas fa-shield-check text-6xl text-green-600"></i><p class="text-xs font-black tracking-widest text-slate-400 uppercase">Sistemas Operando Normally</p></div>';
+                    return;
+                }
+
+                let html = '';
+                list.forEach(ev => {
+                    const myClue = state.role === 'admin' ? Object.values(ev.clues).join(" | ") : (ev.clues[state.role] || "Nenhum vestígio no seu setor. Consulte a equipe no chat.");
+                    let actsHtml = '<div class="flex flex-wrap gap-2.5 mt-4 pt-3 border-t border-slate-700/60">';
+                    const allActs = [...ev.reqActions, ...(ev.decoyActions||[])].sort();
+                    allActs.forEach(ak => {
+                        const def = ACTION_TYPES[ak]; const done = ev.completed.includes(ak);
+                        if(done) actsHtml += `<span class="px-3 py-1.5 bg-green-950/60 text-green-400 text-[10px] font-black uppercase rounded-lg border border-green-800"><i class="fas fa-check mr-1.5"></i> ${def.name}</span>`;
+                        else actsHtml += `<button onclick="app.triggerAction('${ev.id}', '${ak}')" class="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 hover:text-white text-[10px] font-extrabold uppercase rounded-lg transition shadow">${def.name}</button>`;
+                    });
+                    actsHtml += '</div>';
+
+                    html += `<div class="bg-slate-950/90 border-l-4 ${ev.timeLeft < 30 ? 'border-red-500' : 'border-yellow-500'} rounded-xl p-4 shadow-lg mb-3.5"><div class="flex justify-between items-start mb-2.5"><h4 class="font-black text-xs text-white uppercase tracking-wider">${ev.name}</h4><span class="mono text-xs font-bold ${ev.timeLeft < 30 ? 'text-red-400' : 'text-yellow-400'} bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">${ev.timeLeft}s</span></div><p class="text-[11px] text-slate-300 mb-2.5 leading-relaxed">${ev.desc}</p><div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-[11px] mono text-cyan-300"><strong>[INTEL]</strong> ${myClue}</div>${actsHtml}</div>`;
+                });
+                c.innerHTML = html;
+            },
+
+            triggerAction: (eventId, ak) => {
+                if(state.mode !== 'single' && state.roomData?.players[state.userId]?.isEliminated) {
+                    ui.toast("Acesso Revogado pelo Sistema Anti-Sabotagem.", "error"); return;
+                }
+                const def = ACTION_TYPES[ak];
+                if(def.reqInput) {
+                    state.actionPending = { eventId, ak }; document.getElementById('action-title').textContent = def.name; document.getElementById('action-label').textContent = def.label; document.getElementById('action-input').value = ''; ui.showModal('modal-action');
+                } else app.submitAction(eventId, ak, null);
+            },
+
+            confirmAction: () => {
+                if(!state.actionPending) return; const v = document.getElementById('action-input').value.trim(); if(!v) return;
+                app.submitAction(state.actionPending.eventId, state.actionPending.ak, v); state.actionPending = null; ui.hideModal('modal-action');
+            },
+
+            submitAction: async (eventId, ak, val) => {
+                if (state.mode === 'single') {
+                    const incs = state.roomData.incidents; const idx = incs.findIndex(i => i.id === eventId); if(idx === -1) return; const ev = incs[idx];
+                    
+                    let isError = false;
+                    if (ev.decoyActions && ev.decoyActions.includes(ak)) {
+                        isError = true;
+                    } else if (val && val.toLowerCase() !== ev.inputs[ak]?.toLowerCase()) {
+                        isError = true;
+                    }
+
+                    if (isError) {
+                        state.roomData.consecutiveErrors = (state.roomData.consecutiveErrors || 0) + 1;
+                        state.roomData.teamData.score = Math.max(0, state.roomData.teamData.score - 20);
+                        window.soundManager.playError();
+                        ui.toast(`Ação Incorreta! (${state.roomData.consecutiveErrors}/6 erros)`, "error");
+                        if (state.roomData.consecutiveErrors >= 6) {
+                            state.roomData.teamData.security = 0;
+                            if(state.gameLoopInt) { clearInterval(state.gameLoopInt); state.gameLoopInt = null; }
+                            app.renderResults();
+                            return;
+                        }
+                        app.renderGame();
+                        return;
+                    }
+
+                    if(!ev.completed.includes(ak)) {
+                        ev.completed.push(ak);
+                        state.roomData.consecutiveErrors = 0;
+                        state.localScore += 50; state.roomData.teamData.score += 50; state.roomData.logs.push({ time: Date.now(), msg: `[OP] Ação executada: ${ACTION_TYPES[ak].name}`, type: 'succ' });
+                        window.soundManager.playSuccess();
+                        if(ev.completed.length === ev.reqActions.length) { incs.splice(idx,1); state.roomData.teamData.score += 150; ui.toast("Ameaça Neutralizada!", "success"); } else ui.toast("Etapa Concluída.", "success");
+                        app.renderGame();
+                    }
+                    return;
+                }
+
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    const res = await modules.runTransaction(db, async (t) => {
+                        const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                        const doc = await t.get(ref); if(!doc.exists()) return {ok:false, msg:"Sala fechada."}; const data = doc.data();
+                        let list = data.mode === 'versus' ? data.incidents[state.myTeam] : data.incidents;
+                        let tData = data.mode === 'versus' ? data.teamData[state.myTeam] : data.teamData;
+                        let idx = list.findIndex(e => e.id === eventId); if(idx === -1) return {ok:false, msg:"Incidente não encontrado."}; const ev = list[idx];
+
+                        let isDecoy = ev.decoyActions && ev.decoyActions.includes(ak);
+                        let isWrongVal = val && val.toLowerCase() !== ev.inputs[ak]?.toLowerCase();
+
+                        if (isDecoy || isWrongVal) {
+                            tData.score = Math.max(0, tData.score - 20);
+                            data.players[state.userId].consecutiveErrors = (data.players[state.userId].consecutiveErrors || 0) + 1;
+                            const errCount = data.players[state.userId].consecutiveErrors;
+                            
+                            if (errCount >= 6) {
+                                if (data.mode === 'free') {
+                                    data.players[state.userId].isEliminated = true;
+                                    data.logs.push({ time: Date.now(), msg:`[FALHA CRÍTICA] Operador ${state.userName} bloqueado por excesso de erros (Anti-Sabotagem)!`, type:'err'});
+                                    
+                                    let allEliminated = true;
+                                    Object.values(data.players).forEach(p => { if (!p.isEliminated) allEliminated = false; });
+                                    if (allEliminated) {
+                                        tData.security = 0; data.status = 'results';
+                                        data.logs.push({ time: Date.now(), msg:`[FALHA CRÍTICA] Toda a equipe foi eliminada! Defesas colapsadas!`, type:'err'});
+                                    }
+                                } else {
+                                    tData.security = 0; data.status = 'results';
+                                    data.logs.push({ time: Date.now(), msg:`[FALHA CRÍTICA] ${state.userName} excedeu 6 erros. Defesa da equipe colapsou!`, type:'err'});
+                                }
+                            } else {
+                                data.logs.push({ time: Date.now(), msg:`[FALHA] ${state.userName} tomou decisão incorreta (${errCount}/6 erros).`, type:'err'});
+                            }
+                            
+                            t.set(ref, data);
+                            return {ok:false, msg:`Ação Incorreta! (${errCount}/6 erros)`};
+                        }
+
+                        if(!ev.completed.includes(ak)) {
+                            ev.completed.push(ak);
+                            data.players[state.userId].consecutiveErrors = 0;
+                            data.players[state.userId].score = (data.players[state.userId].score || 0) + 50; tData.score += 50; data.logs.push({ time: Date.now(), msg:`[OP] ${state.userName} ativou: ${ACTION_TYPES[ak].name}`, type:'succ'});
+                            if(ev.completed.length === ev.reqActions.length) { list.splice(idx,1); tData.score += 150; data.logs.push({ time: Date.now(), msg:`[SISTEMA] Ameaça contida com sucesso.`, type:'succ'}); }
+                            t.set(ref, data); return {ok:true, msg:"Comando Aceito."};
+                        }
+                        return {ok:false, msg:"Ação já realizada."};
+                    });
+                    if(res.ok) {
+                        ui.toast(res.msg, "success");
+                        window.soundManager.playSuccess();
+                    } else {
+                        ui.toast(res.msg, "error");
+                        window.soundManager.playError();
+                    }
+                } catch(e) {}
+            },
+
+            renderTopology: () => {
+                let list = []; if(state.mode === 'single' || state.mode === 'free') list = state.roomData?.incidents || []; else list = (state.roomData?.incidents || {})[state.myTeam] || [];
+                const nodes = { 'data': false, 'servers': false, 'wan': false }; list.forEach(i => { if(nodes[i.targetNode] !== undefined) nodes[i.targetNode] = true; });
+                const up = (id, alert) => { const el = document.getElementById(`node-${id}`); if(el) { if(alert) el.classList.add('node-alert'); else el.classList.remove('node-alert'); } };
+                up('data', nodes['data']); up('servers', nodes['servers']); up('wan', list.length > 2);
+                
+                let sec = 100; if(state.mode === 'versus') sec = state.roomData?.teamData[state.myTeam]?.security; else sec = state.roomData?.teamData?.security; up('firewall', sec < 50);
+            },
+
+            filterLogs: (node) => { state.nodeFilter = node; document.getElementById('log-filter-status').textContent = node.toUpperCase(); app.renderLogs(); },
+
+            renderLogs: () => {
+                const c = document.getElementById('system-logs'); const allLogs = state.roomData?.logs || []; let filtered = allLogs;
+                if (state.nodeFilter !== 'all') { const term = state.nodeFilter === 'data' ? 'BD' : (state.nodeFilter === 'servers' ? 'Servidor' : 'Firewall'); filtered = allLogs.filter(l => l.msg.toLowerCase().includes(term.toLowerCase()) || l.type === 'err'); }
+                c.innerHTML = [...filtered].reverse().map(l => { const color = l.type === 'err' ? 'text-red-400 font-bold' : (l.type === 'succ' ? 'text-green-400 font-bold' : 'text-slate-300'); return `<div class="${color} border-b border-slate-800/60 pb-1.5 mb-1.5">> ${ui.sanitize(l.msg)}</div>`; }).join('');
+            },
+
+            switchChatTab: (tab) => {
+                state.chatTab = tab; document.getElementById('tab-team').className = tab === 'team' ? 'flex-1 py-2.5 text-cyan-400 border-b-2 border-cyan-400 bg-slate-900/60 font-black' : 'flex-1 py-2.5 text-slate-400 border-b-2 border-transparent hover:bg-slate-900/30 transition'; document.getElementById('tab-general').className = tab === 'general' ? 'flex-1 py-2.5 text-cyan-400 border-b-2 border-cyan-400 bg-slate-900/60 font-black' : 'flex-1 py-2.5 text-slate-400 border-b-2 border-transparent hover:bg-slate-900/30 transition'; app.renderChat();
+            },
+
+            sendChatMessage: async (e) => {
+                e.preventDefault(); const inp = document.getElementById('chat-input'); const txt = inp.value.trim(); if(!txt || !state.roomCode) return; inp.value = '';
+                const d = new Date(); const tStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                const msgObj = { sender: state.userName, text: txt, time: tStr, type: state.chatTab || 'team', team: state.myTeam, roomName: state.roomData.name, timestamp: Date.now() };
+
+                const c = document.getElementById('chat-messages'); c.innerHTML += `<div class="text-cyan-200"><span class="text-slate-400">[${tStr}]</span> <strong class="uppercase text-[11px]">Você:</strong> ${ui.sanitize(txt)}</div>`; c.scrollTop = c.scrollHeight;
+
+                const { db, modules, csAppId } = window.csFirebase;
+                try {
+                    await modules.runTransaction(db, async (t) => {
+                        const ref = modules.doc(db, 'artifacts', csAppId, 'teams', state.roomCode);
+                        const doc = await t.get(ref); if(!doc.exists()) return; const data = doc.data(); data.chat = [...(data.chat || []), msgObj].slice(-50); t.set(ref, data);
+                    });
+                } catch(err) {}
+            },
+
+            renderChat: () => {
+                const c = document.getElementById('chat-messages');
+                let list = [];
+                
+                if (state.chatTab === 'general' && state.mode === 'free' && state.roomData?.matchId) {
+                    Object.values(state.matchRooms).forEach(r => {
+                        (r.chat || []).filter(m => m.type === 'general').forEach(m => list.push(m));
+                    });
+                    list.sort((a,b) => a.timestamp - b.timestamp);
+                } else {
+                    list = (state.roomData?.chat || []).filter(m => state.chatTab === 'general' ? m.type === 'general' : (m.type === 'team' && m.team === state.myTeam));
+                }
+
+                c.innerHTML = list.map(m => {
+                    const isMe = m.sender === state.userName; 
+                    let prefix = '';
+                    if (state.mode === 'versus') {
+                        prefix = m.team === 'blue' ? '<span class="text-blue-400 font-extrabold">[B]</span> ' : '<span class="text-red-400 font-extrabold">[R]</span> ';
+                    } else if (state.mode === 'free' && state.chatTab === 'general' && m.roomName) {
+                        prefix = `<span class="text-purple-400 font-extrabold">[${ui.sanitize(m.roomName)}]</span> `;
+                    }
+                    return `<div class="${isMe ? 'text-cyan-200' : 'text-slate-200'}"><span class="text-slate-400">[${m.time}]</span> ${prefix}<strong class="uppercase text-[11px] ${isMe?'':'text-slate-300'}">${ui.sanitize(m.sender)}:</strong> ${ui.sanitize(m.text)}</div>`;
+                }).join('');
+                c.scrollTop = c.scrollHeight;
+            },
+
+            renderResults: () => {
+                ui.showView('view-results'); const d = state.roomData;
+                
+                if (!state.scoreSaved) {
+                    let globalScore = parseInt(localStorage.getItem('cs_global_score') || '0');
+                    globalScore += state.localScore;
+                    localStorage.setItem('cs_global_score', globalScore.toString());
+                    document.getElementById('lbl-global-score').textContent = globalScore;
+                    state.scoreSaved = true;
+                }
+
+                if (state.mode === 'single' || (state.mode === 'free' && !d.matchId)) {
+                    document.getElementById('res-cont-standard').classList.remove('hidden'); document.getElementById('res-cont-versus').classList.add('hidden'); document.getElementById('res-cont-multiteam').classList.add('hidden'); 
+                    document.getElementById('res-title').textContent = (d.teamData?.security > 0) ? "OPERAÇÃO CONCLUÍDA" : "FALHA CRÍTICA"; document.getElementById('res-std-score').textContent = d.teamData?.score || 0; document.getElementById('res-std-sec').textContent = (d.teamData?.security || 0) + "%";
+                } else if (state.mode === 'versus') {
+                    document.getElementById('res-cont-standard').classList.add('hidden'); document.getElementById('res-cont-versus').classList.remove('hidden'); document.getElementById('res-cont-multiteam').classList.add('hidden');
+                    const bs = d.teamData?.blue?.security||0; const rs = d.teamData?.red?.security||0; const bsc = d.teamData?.blue?.score||0; const rsc = d.teamData?.red?.score||0;
+                    let title = "EMPATE TÁTICO";
+                    if (bs > rs || (bs === rs && bsc > rsc)) { title = "VITÓRIA: BLUE TEAM"; document.getElementById('res-vs-b-win').classList.remove('hidden'); }
+                    else if (rs > bs || (rs === bs && rsc > bsc)) { title = "VITÓRIA: RED TEAM"; document.getElementById('res-vs-r-win').classList.remove('hidden'); }
+                    document.getElementById('res-title').textContent = title; document.getElementById('res-vs-b-score').textContent = bsc; document.getElementById('res-vs-b-sec').textContent = bs + "%"; document.getElementById('res-vs-r-score').textContent = rsc; document.getElementById('res-vs-r-sec').textContent = rs + "%";
+                } else if (state.mode === 'free' && d.matchId) {
+                    document.getElementById('res-cont-standard').classList.add('hidden'); document.getElementById('res-cont-versus').classList.add('hidden');
+                    document.getElementById('res-cont-multiteam').classList.remove('hidden');
+                    
+                    const rooms = Object.values(state.matchRooms).sort((a,b) => {
+                        if (b.teamData.security !== a.teamData.security) return b.teamData.security - a.teamData.security;
+                        return b.teamData.score - a.teamData.score;
+                    });
+                    
+                    const winner = rooms[0];
+                    const isMyTeamWinner = winner?.code === state.roomCode;
+                    document.getElementById('res-title').textContent = isMyTeamWinner ? "VITÓRIA DA SUA EQUIPE!" : `VITÓRIA: ${winner ? winner.name.toUpperCase() : '---'}`;
+                    
+                    let html = '';
+                    rooms.forEach((r, idx) => {
+                        html += `<div class="flex justify-between items-center p-3 mb-2 bg-slate-900 border ${r.code === state.roomCode ? 'border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]' : 'border-slate-700'} rounded-lg">
+                            <div class="flex items-center gap-4">
+                                <span class="text-xl font-black ${idx === 0 ? 'text-yellow-400 drop-shadow-md' : 'text-slate-500'}">#${idx+1}</span>
+                                <span class="font-bold text-white uppercase">${ui.sanitize(r.name)}</span>
+                            </div>
+                            <div class="text-right flex gap-6 items-center">
+                                <div><span class="text-[9px] text-slate-400 block tracking-widest uppercase">Segurança</span><span class="text-sm font-bold ${r.teamData.security < 30 ? 'text-red-400' : 'text-white'}">${r.teamData.security}%</span></div>
+                                <div><span class="text-[9px] text-slate-400 block tracking-widest uppercase">Score</span><span class="text-base font-black text-cyan-400 mono">${r.teamData.score} PTS</span></div>
+                            </div>
+                        </div>`;
+                    });
+                    document.getElementById('res-multiteam-list').innerHTML = html;
+                }
+                document.getElementById('res-my-score').innerHTML = `${state.localScore} <span class="text-sm font-bold">PTS</span>`;
+            },
+
+            toggleSfx(enabled) {
+                window.soundManager.sfxEnabled = enabled;
+            },
+
+            toggleMusic(enabled) {
+                window.soundManager.musicEnabled = enabled;
+                if (!enabled) window.soundManager.stopAmbience();
+                else if (!document.getElementById('view-game').classList.contains('active')) window.soundManager.startAmbience();
+            }
+        };
+
+        window.onload = app.init;
+    </script>
+</body>
+</html>
